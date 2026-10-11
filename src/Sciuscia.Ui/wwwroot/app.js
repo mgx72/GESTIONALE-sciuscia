@@ -954,10 +954,10 @@
   document.getElementById("nav-commesse").addEventListener("click", mostraSchermataCommesse);
   document.getElementById("nav-anagrafiche").addEventListener("click", mostraSchermataAnagrafiche);
 
-  document.querySelectorAll(".tab-btn").forEach((bottone) => {
+  document.querySelectorAll("#view-anagrafiche .tab-btn").forEach((bottone) => {
     bottone.addEventListener("click", () => {
-      document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
-      document.querySelectorAll(".tab-pane").forEach((p) => { p.hidden = true; });
+      document.querySelectorAll("#view-anagrafiche .tab-btn").forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll("#view-anagrafiche .tab-pane").forEach((p) => { p.hidden = true; });
       bottone.classList.add("active");
       const riquadro = document.getElementById("tab-" + bottone.dataset.tab);
       riquadro.hidden = false;
