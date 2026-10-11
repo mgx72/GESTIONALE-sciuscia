@@ -1,0 +1,85 @@
+name: Compila Fondazioni Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Scarica il progetto
+        uses: actions/checkout@v6
+
+      - name: Installa .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Ripristina le dipendenze
+        run: dotnet restore src/Sciuscia.Foundations/Sciuscia.Foundations.csproj
+
+      - name: Compila con controlli rigorosi
+        run: dotnet build src/Sciuscia.Foundations/Sciuscia.Foundations.csproj --configuration Release --no-restore
+
+      - name: Esegui l'autotest Fondazioni
+        run: dotnet run --project src/Sciuscia.Foundations/Sciuscia.Foundations.csproj --configuration Release --no-build -- --self-test
+
+      - name: Crea l'eseguibile Windows autonomo
+        run: >-
+          dotnet publish src/Sciuscia.Foundations/Sciuscia.Foundations.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          --output dist/Fondazioni-Solo-LAB-win-x64
+
+      - name: Collauda l'eseguibile pubblicato
+        shell: pwsh
+        run: |
+          & ./dist/Fondazioni-Solo-LAB-win-x64/Sciuscia.Foundations.exe --self-test
+          if ($LASTEXITCODE -ne 0) { throw "Autotest eseguibile non superato." }
+
+      - name: Comprimi il pacchetto
+        shell: pwsh
+        run: Compress-Archive -Path dist/Fondazioni-Solo-LAB-win-x64/* -DestinationPath dist/Gestionale-Sciuscia-Fondazioni-Solo-LAB-win-x64.zip
+
+      - name: Conserva l'eseguibile compilato
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gestionale-Sciuscia-Fondazioni-Solo-LAB-win-x64
+          path: dist/Gestionale-Sciuscia-Fondazioni-Solo-LAB-win-x64.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Ripristina le dipendenze (interfaccia grafica)
+        run: dotnet restore src/Sciuscia.Ui/Sciuscia.Ui.csproj
+
+      - name: Compila l'interfaccia grafica con controlli rigorosi
+        run: dotnet build src/Sciuscia.Ui/Sciuscia.Ui.csproj --configuration Release --no-restore
+
+      - name: Crea l'eseguibile Windows autonomo (interfaccia grafica)
+        run: >-
+          dotnet publish src/Sciuscia.Ui/Sciuscia.Ui.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --output dist/Gestionale-Sciuscia-Interfaccia-win-x64
+
+      - name: Comprimi il pacchetto (interfaccia grafica)
+        shell: pwsh
+        run: Compress-Archive -Path dist/Gestionale-Sciuscia-Interfaccia-win-x64/* -DestinationPath dist/Gestionale-Sciuscia-Interfaccia-win-x64.zip
+
+      - name: Conserva l'eseguibile compilato (interfaccia grafica)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gestionale-Sciuscia-Interfaccia-win-x64
+          path: dist/Gestionale-Sciuscia-Interfaccia-win-x64.zip
+          if-no-files-found: error
+          retention-days: 30
