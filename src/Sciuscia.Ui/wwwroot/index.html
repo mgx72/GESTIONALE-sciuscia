@@ -270,8 +270,9 @@
 
       <div class="tab-pane" id="foto-tab-file" hidden>
         <div class="field">
-          <label for="foto-file-input">Scegli un'immagine dal computer</label>
-          <input type="file" id="foto-file-input" accept="image/*" />
+          <button type="button" id="btn-scegli-file-foto">Scegli un'immagine dal computer…</button>
+          <input type="file" id="foto-file-input" accept="image/*" hidden />
+          <p class="hint" id="foto-file-nome">Nessun file scelto.</p>
         </div>
         <div class="foto-riquadro">
           <img id="foto-anteprima-file" hidden alt="Anteprima fotografia scelta" />

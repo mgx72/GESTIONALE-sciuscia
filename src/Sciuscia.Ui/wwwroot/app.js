@@ -31,6 +31,8 @@
   const bottoneRifaiFoto = document.getElementById("btn-rifai-foto");
   const bottoneSalvaFoto = document.getElementById("btn-salva-foto");
   const inputFileFoto = document.getElementById("foto-file-input");
+  const bottoneSceglieFileFoto = document.getElementById("btn-scegli-file-foto");
+  const nomeFileFotoScelta = document.getElementById("foto-file-nome");
 
   const ETICHETTE_STATO = {
     DA_LAVORARE: "Da lavorare",
@@ -729,6 +731,7 @@
     fotoDaFileDataUrl = null;
     fotoDaFileNome = null;
     inputFileFoto.value = "";
+    nomeFileFotoScelta.textContent = "Nessun file scelto.";
     anteprimaFile.hidden = true;
     anteprimaFile.removeAttribute("src");
     bottoneSalvaFoto.disabled = true;
@@ -828,6 +831,7 @@
     if (!file) {
       fotoDaFileDataUrl = null;
       fotoDaFileNome = null;
+      nomeFileFotoScelta.textContent = "Nessun file scelto.";
       anteprimaFile.hidden = true;
       aggiornaStatoSalvaFoto();
       return;
@@ -837,6 +841,7 @@
     lettore.onload = () => {
       fotoDaFileDataUrl = lettore.result;
       fotoDaFileNome = file.name;
+      nomeFileFotoScelta.textContent = file.name;
       anteprimaFile.src = fotoDaFileDataUrl;
       anteprimaFile.hidden = false;
       aggiornaStatoSalvaFoto();
@@ -890,6 +895,7 @@
   document.getElementById("btn-tab-foto-file").addEventListener("click", () => cambiaSchedaFoto("file"));
   bottoneScattaFoto.addEventListener("click", scattaFoto);
   bottoneRifaiFoto.addEventListener("click", rifaiFoto);
+  bottoneSceglieFileFoto.addEventListener("click", () => inputFileFoto.click());
   inputFileFoto.addEventListener("change", fotoDaFileScelta);
   document.getElementById("btn-annulla-foto").addEventListener("click", chiudiModaleFoto);
   bottoneSalvaFoto.addEventListener("click", salvaFoto);
