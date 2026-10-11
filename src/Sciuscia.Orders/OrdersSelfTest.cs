@@ -22,7 +22,8 @@ public static class OrdersSelfTest
             var options = new FoundationOptions(testRoot);
             var database = new DatabaseInitializer(paths, options, maintenanceGate);
             var installation = await database.EnsureCreatedAsync();
-            var orders = new OrdersRuntime(paths, maintenanceGate);
+            var photoStorage = new PhotoStorageService(paths, maintenanceGate);
+            var orders = new OrdersRuntime(paths, maintenanceGate, photoStorage);
 
             var (customerId, categoryId, brandId, artisanId) = await SeedMinimalRegistryAsync(paths);
 
@@ -39,6 +40,22 @@ public static class OrdersSelfTest
                 item1.VisibleCode != $"{order.VisibleCode}/1" || item2.VisibleCode != $"{order.VisibleCode}/2")
             {
                 throw new InvalidDataException("Numerazione sottocodice articolo non corretta.");
+            }
+
+            // --- Fotografie (aggiunta, elenco, cancellazione logica col file spostato nel cestino) ---
+            var fotoFinta = System.Text.Encoding.ASCII.GetBytes("finta-immagine-per-autotest");
+            var foto = await orders.Photos.AddAsync(item1.ItemId, fotoFinta, ".jpg", "WEBCAM");
+            var fotoElenco = await orders.Photos.ListByItemAsync(item1.ItemId);
+            if (fotoElenco.Count != 1 || fotoElenco[0].PhotoId != foto.PhotoId)
+            {
+                throw new InvalidDataException("La fotografia aggiunta non risulta nell'elenco dell'articolo.");
+            }
+
+            await orders.Photos.DeleteAsync(foto.PhotoId, foto.RowVersion);
+            var fotoElencoDopoCancellazione = await orders.Photos.ListByItemAsync(item1.ItemId);
+            if (fotoElencoDopoCancellazione.Count != 0)
+            {
+                throw new InvalidDataException("La fotografia cancellata non avrebbe dovuto comparire ancora nell'elenco.");
             }
 
             // --- Lavorazione interna a prezzo definito ---
@@ -111,6 +128,7 @@ public static class OrdersSelfTest
             Console.WriteLine($"Commessa: {order.VisibleCode} (annullata di prova)");
             Console.WriteLine($"Articoli: {item1.VisibleCode}, {item2.VisibleCode}");
             Console.WriteLine($"Totale lavorazioni: {financials.TotalCents} centesimi");
+            Console.WriteLine("Fotografia: aggiunta, elencata e cancellata (logicamente) con successo");
         }
         finally
         {

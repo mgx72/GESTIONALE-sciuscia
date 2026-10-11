@@ -20,7 +20,7 @@ public sealed class FoundationRuntime
         // Stesso AppPaths e stesso semaforo delle Fondazioni: le scritture di Anagrafiche e
         // Commesse restano serializzate insieme a quelle di Fondazioni in un solo processo.
         Registry = new RegistryRuntime(Paths, _maintenanceGate);
-        Orders = new OrdersRuntime(Paths, _maintenanceGate);
+        Orders = new OrdersRuntime(Paths, _maintenanceGate, Photos);
         Operations = new OperationsRuntime(Paths, _maintenanceGate);
     }
 

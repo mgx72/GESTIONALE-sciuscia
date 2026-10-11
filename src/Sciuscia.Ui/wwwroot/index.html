@@ -245,6 +245,46 @@
     </div>
   </div>
 
+  <div id="modal-foto" class="modal-overlay" hidden>
+    <div class="modal modal-foto">
+      <h3>Aggiungi fotografia</h3>
+      <p class="subtitle" id="foto-articolo-codice"></p>
+
+      <div class="tabs-foto">
+        <button type="button" class="tab-btn active" id="btn-tab-foto-webcam" data-foto-tab="webcam">Scatta con la webcam</button>
+        <button type="button" class="tab-btn" id="btn-tab-foto-file" data-foto-tab="file">Carica da file</button>
+      </div>
+
+      <div class="tab-pane" id="foto-tab-webcam">
+        <div class="foto-riquadro">
+          <video id="foto-video" autoplay playsinline muted></video>
+          <canvas id="foto-canvas" hidden></canvas>
+          <img id="foto-anteprima-webcam" hidden alt="Fotografia scattata" />
+        </div>
+        <p id="foto-webcam-errore" class="hint foto-errore" hidden></p>
+        <div class="modal-actions modal-actions-left">
+          <button type="button" id="btn-scatta-foto">Scatta</button>
+          <button type="button" id="btn-rifai-foto" hidden>Rifai la foto</button>
+        </div>
+      </div>
+
+      <div class="tab-pane" id="foto-tab-file" hidden>
+        <div class="field">
+          <label for="foto-file-input">Scegli un'immagine dal computer</label>
+          <input type="file" id="foto-file-input" accept="image/*" />
+        </div>
+        <div class="foto-riquadro">
+          <img id="foto-anteprima-file" hidden alt="Anteprima fotografia scelta" />
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="btn-annulla-foto">Annulla</button>
+        <button type="button" id="btn-salva-foto" class="primary" disabled>Salva fotografia</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal-cliente-anagrafica" class="modal-overlay" hidden>
     <div class="modal">
       <h3 id="titolo-modal-cliente">Nuovo cliente</h3>

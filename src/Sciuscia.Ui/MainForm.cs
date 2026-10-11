@@ -42,6 +42,7 @@ public sealed class MainForm : Form
             _webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
                 "sciuscia.app", webRootPath, CoreWebView2HostResourceAccessKind.Allow);
             _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+            _webView.CoreWebView2.PermissionRequested += OnPermissionRequested;
             _webView.CoreWebView2.Navigate("https://sciuscia.app/index.html");
         }
         catch (Exception exception)
@@ -52,6 +53,20 @@ public sealed class MainForm : Form
                 "Gestionale Sciuscià",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// Autorizza da sola la fotocamera per la pagina interna dell'applicazione (schermata "Foto"
+    /// nel dettaglio commessa): è contenuto nostro, non un sito esterno, quindi non ha senso
+    /// mostrare all'operatore la domanda di permesso del browser ogni volta.
+    /// </summary>
+    private static void OnPermissionRequested(object? sender, CoreWebView2PermissionRequestedEventArgs e)
+    {
+        if (e.PermissionKind == CoreWebView2PermissionKind.Camera
+            && e.Uri.StartsWith("https://sciuscia.app/", StringComparison.OrdinalIgnoreCase))
+        {
+            e.State = CoreWebView2PermissionState.Allow;
         }
     }
 

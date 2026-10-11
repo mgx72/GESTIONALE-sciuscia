@@ -21,6 +21,17 @@
   const selectLavorazioneTipo = document.getElementById("lavorazione-tipo");
   const selectLavorazioneFascia = document.getElementById("lavorazione-fascia");
 
+  const modaleFoto = document.getElementById("modal-foto");
+  const videoFoto = document.getElementById("foto-video");
+  const canvasFoto = document.getElementById("foto-canvas");
+  const anteprimaWebcam = document.getElementById("foto-anteprima-webcam");
+  const anteprimaFile = document.getElementById("foto-anteprima-file");
+  const erroreWebcam = document.getElementById("foto-webcam-errore");
+  const bottoneScattaFoto = document.getElementById("btn-scatta-foto");
+  const bottoneRifaiFoto = document.getElementById("btn-rifai-foto");
+  const bottoneSalvaFoto = document.getElementById("btn-salva-foto");
+  const inputFileFoto = document.getElementById("foto-file-input");
+
   const ETICHETTE_STATO = {
     DA_LAVORARE: "Da lavorare",
     PRESSO_ARTIGIANO: "Presso l'artigiano",
@@ -45,6 +56,11 @@
   let marcaAnagraficaInModifica = null;
   let lavorazioneListinoInModifica = null;
   let lavorazioneListinoPerFasce = null;
+  let articoloPerFotoId = null;
+  let streamWebcamAttivo = null;
+  let fotoCatturataDataUrl = null;
+  let fotoDaFileDataUrl = null;
+  let fotoDaFileNome = null;
 
   function formattaEuro(centesimi) {
     return (centesimi / 100).toLocaleString("it-IT", {
@@ -235,6 +251,7 @@
     commessaCorrenteId = null;
     vistaDettaglio.hidden = true;
     vistaElenco.hidden = false;
+    fermaWebcam();
   }
 
   function mostraVistaDettaglio() {
@@ -304,9 +321,11 @@
         <div class="scheda-articolo-azioni">
           <select class="select-stato-articolo"></select>
           <button type="button" class="btn-aggiungi-lavorazione">+ Lavorazione</button>
+          <button type="button" class="btn-aggiungi-foto">+ Foto</button>
         </div>
       </div>
       <div class="lista-lavorazioni"></div>
+      <div class="lista-foto"></div>
     `;
 
     const selectStato = scheda.querySelector(".select-stato-articolo");
@@ -322,6 +341,7 @@
     selectStato.addEventListener("change", () => cambiaStatoArticolo(articolo.itemId, articolo.rowVersion, selectStato.value));
 
     scheda.querySelector(".btn-aggiungi-lavorazione").addEventListener("click", () => apriModaleLavorazione(articolo.itemId, articolo.visibleCode));
+    scheda.querySelector(".btn-aggiungi-foto").addEventListener("click", () => apriModaleFoto(articolo.itemId, articolo.visibleCode));
 
     const listaLavorazioni = scheda.querySelector(".lista-lavorazioni");
     if (dettaglioArticolo.works.length === 0) {
@@ -332,7 +352,61 @@
       }
     }
 
+    const listaFoto = scheda.querySelector(".lista-foto");
+    listaFoto.appendChild(costruisciGalleriaFoto(dettaglioArticolo.photos || []));
+
     return scheda;
+  }
+
+  function costruisciGalleriaFoto(foto) {
+    const contenitore = document.createElement("div");
+
+    if (foto.length === 0) {
+      contenitore.innerHTML = '<div class="nessuna-foto">Nessuna fotografia.</div>';
+      return contenitore;
+    }
+
+    const galleria = document.createElement("div");
+    galleria.className = "galleria-foto";
+
+    for (const f of foto) {
+      const miniatura = document.createElement("div");
+      miniatura.className = "miniatura-foto";
+      miniatura.innerHTML = `
+        <img src="${f.dataUrl}" alt="Fotografia articolo" />
+        <button type="button" class="btn-elimina-foto" title="Elimina fotografia">×</button>
+      `;
+      miniatura.querySelector("img").addEventListener("click", () => mostraFotoGrande(f.dataUrl));
+      miniatura.querySelector(".btn-elimina-foto").addEventListener("click", (evento) => {
+        evento.stopPropagation();
+        eliminaFoto(f.photoId, f.rowVersion);
+      });
+      galleria.appendChild(miniatura);
+    }
+
+    contenitore.appendChild(galleria);
+    return contenitore;
+  }
+
+  function mostraFotoGrande(dataUrl) {
+    const overlay = document.createElement("div");
+    overlay.className = "anteprima-foto-grande-overlay";
+    overlay.innerHTML = `<img src="${dataUrl}" alt="Fotografia ingrandita" />`;
+    overlay.addEventListener("click", () => overlay.remove());
+    document.body.appendChild(overlay);
+  }
+
+  async function eliminaFoto(fotoId, rowVersion) {
+    if (!window.confirm("Eliminare questa fotografia? Il file resta comunque conservato nel cestino interno.")) {
+      return;
+    }
+    nascondiErrore();
+    try {
+      await window.sciuscia.call("articoli.eliminaFoto", { fotoId, rowVersion });
+      await ricaricaDettaglioCommessa();
+    } catch (errore) {
+      mostraErrore("Eliminazione fotografia non riuscita: " + errore.message);
+    }
   }
 
   function costruisciRigaLavorazione(dettaglioLavorazione) {
@@ -643,6 +717,182 @@
       mostraErrore("Aggiunta lavorazione non riuscita: " + errore.message);
     }
   }
+
+  // --- Fotografie ---
+
+  function apriModaleFoto(articoloId, articoloCodice) {
+    nascondiErrore();
+    articoloPerFotoId = articoloId;
+    document.getElementById("foto-articolo-codice").textContent = "Articolo " + articoloCodice;
+
+    fotoCatturataDataUrl = null;
+    fotoDaFileDataUrl = null;
+    fotoDaFileNome = null;
+    inputFileFoto.value = "";
+    anteprimaFile.hidden = true;
+    anteprimaFile.removeAttribute("src");
+    bottoneSalvaFoto.disabled = true;
+
+    cambiaSchedaFoto("webcam");
+    modaleFoto.hidden = false;
+  }
+
+  function cambiaSchedaFoto(scheda) {
+    const suWebcam = scheda === "webcam";
+    document.getElementById("foto-tab-webcam").hidden = !suWebcam;
+    document.getElementById("foto-tab-file").hidden = suWebcam;
+    document.getElementById("btn-tab-foto-webcam").classList.toggle("active", suWebcam);
+    document.getElementById("btn-tab-foto-file").classList.toggle("active", !suWebcam);
+
+    aggiornaStatoSalvaFoto();
+
+    if (suWebcam) {
+      avviaWebcam();
+    } else {
+      fermaWebcam();
+    }
+  }
+
+  function aggiornaStatoSalvaFoto() {
+    const suWebcam = !document.getElementById("foto-tab-webcam").hidden;
+    bottoneSalvaFoto.disabled = suWebcam ? !fotoCatturataDataUrl : !fotoDaFileDataUrl;
+  }
+
+  async function avviaWebcam() {
+    erroreWebcam.hidden = true;
+    anteprimaWebcam.hidden = true;
+    videoFoto.hidden = false;
+    bottoneScattaFoto.hidden = false;
+    bottoneRifaiFoto.hidden = true;
+    fotoCatturataDataUrl = null;
+    aggiornaStatoSalvaFoto();
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      erroreWebcam.textContent = "Questo PC non permette l'accesso alla webcam da questa applicazione.";
+      erroreWebcam.hidden = false;
+      bottoneScattaFoto.hidden = true;
+      return;
+    }
+
+    try {
+      streamWebcamAttivo = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      videoFoto.srcObject = streamWebcamAttivo;
+    } catch (errore) {
+      erroreWebcam.textContent = "Non è stato possibile accendere la webcam: " + errore.message + ". Verificare che sia collegata e che nessun'altra applicazione la stia già usando.";
+      erroreWebcam.hidden = false;
+      bottoneScattaFoto.hidden = true;
+    }
+  }
+
+  function fermaWebcam() {
+    if (streamWebcamAttivo) {
+      for (const traccia of streamWebcamAttivo.getTracks()) {
+        traccia.stop();
+      }
+      streamWebcamAttivo = null;
+    }
+    videoFoto.srcObject = null;
+  }
+
+  function scattaFoto() {
+    if (!videoFoto.videoWidth) {
+      return;
+    }
+    canvasFoto.width = videoFoto.videoWidth;
+    canvasFoto.height = videoFoto.videoHeight;
+    canvasFoto.getContext("2d").drawImage(videoFoto, 0, 0, canvasFoto.width, canvasFoto.height);
+    fotoCatturataDataUrl = canvasFoto.toDataURL("image/jpeg", 0.85);
+
+    anteprimaWebcam.src = fotoCatturataDataUrl;
+    anteprimaWebcam.hidden = false;
+    videoFoto.hidden = true;
+    bottoneScattaFoto.hidden = true;
+    bottoneRifaiFoto.hidden = false;
+    fermaWebcam();
+    aggiornaStatoSalvaFoto();
+  }
+
+  function rifaiFoto() {
+    anteprimaWebcam.hidden = true;
+    anteprimaWebcam.removeAttribute("src");
+    fotoCatturataDataUrl = null;
+    aggiornaStatoSalvaFoto();
+    avviaWebcam();
+  }
+
+  function fotoDaFileScelta() {
+    const file = inputFileFoto.files && inputFileFoto.files[0];
+    if (!file) {
+      fotoDaFileDataUrl = null;
+      fotoDaFileNome = null;
+      anteprimaFile.hidden = true;
+      aggiornaStatoSalvaFoto();
+      return;
+    }
+
+    const lettore = new FileReader();
+    lettore.onload = () => {
+      fotoDaFileDataUrl = lettore.result;
+      fotoDaFileNome = file.name;
+      anteprimaFile.src = fotoDaFileDataUrl;
+      anteprimaFile.hidden = false;
+      aggiornaStatoSalvaFoto();
+    };
+    lettore.onerror = () => {
+      mostraErrore("Non è stato possibile leggere il file scelto.");
+    };
+    lettore.readAsDataURL(file);
+  }
+
+  function chiudiModaleFoto() {
+    modaleFoto.hidden = true;
+    fermaWebcam();
+    articoloPerFotoId = null;
+    fotoCatturataDataUrl = null;
+    fotoDaFileDataUrl = null;
+    fotoDaFileNome = null;
+  }
+
+  function estensioneDaDataUrl(dataUrl) {
+    const corrispondenza = /^data:image\/(jpeg|jpg|png|webp)/i.exec(dataUrl);
+    const tipo = corrispondenza ? corrispondenza[1].toLowerCase() : "jpeg";
+    return tipo === "jpg" ? "jpeg" : tipo;
+  }
+
+  async function salvaFoto() {
+    const suWebcam = !document.getElementById("foto-tab-webcam").hidden;
+    const immagineBase64 = suWebcam ? fotoCatturataDataUrl : fotoDaFileDataUrl;
+
+    if (!articoloPerFotoId || !immagineBase64) {
+      return;
+    }
+
+    nascondiErrore();
+    try {
+      await window.sciuscia.call("articoli.aggiungiFoto", {
+        articoloId: articoloPerFotoId,
+        immagineBase64,
+        estensione: "." + estensioneDaDataUrl(immagineBase64),
+        sorgente: suWebcam ? "WEBCAM" : "IMPORTAZIONE",
+        nomeFile: suWebcam ? null : fotoDaFileNome,
+      });
+      chiudiModaleFoto();
+      await ricaricaDettaglioCommessa();
+    } catch (errore) {
+      mostraErrore("Salvataggio fotografia non riuscito: " + errore.message);
+    }
+  }
+
+  document.getElementById("btn-tab-foto-webcam").addEventListener("click", () => cambiaSchedaFoto("webcam"));
+  document.getElementById("btn-tab-foto-file").addEventListener("click", () => cambiaSchedaFoto("file"));
+  bottoneScattaFoto.addEventListener("click", scattaFoto);
+  bottoneRifaiFoto.addEventListener("click", rifaiFoto);
+  inputFileFoto.addEventListener("change", fotoDaFileScelta);
+  document.getElementById("btn-annulla-foto").addEventListener("click", chiudiModaleFoto);
+  bottoneSalvaFoto.addEventListener("click", salvaFoto);
 
   document.getElementById("btn-torna-elenco").addEventListener("click", () => {
     mostraVistaElenco();

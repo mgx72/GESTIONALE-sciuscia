@@ -8,16 +8,18 @@ namespace Sciuscia.Orders;
 /// </summary>
 public sealed class OrdersRuntime
 {
-    public OrdersRuntime(AppPaths paths, SemaphoreSlim maintenanceGate)
+    public OrdersRuntime(AppPaths paths, SemaphoreSlim maintenanceGate, PhotoStorageService photoStorage)
     {
         Orders = new OrderService(paths, maintenanceGate);
         Items = new ItemService(paths, maintenanceGate);
         ItemWorks = new ItemWorkService(paths, maintenanceGate);
         ExternalAssignments = new ExternalAssignmentService(paths, maintenanceGate);
+        Photos = new PhotoService(paths, maintenanceGate, photoStorage, Orders, Items);
     }
 
     public OrderService Orders { get; }
     public ItemService Items { get; }
     public ItemWorkService ItemWorks { get; }
     public ExternalAssignmentService ExternalAssignments { get; }
+    public PhotoService Photos { get; }
 }

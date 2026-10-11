@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -72,6 +73,8 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                 "articoli.crea" => await CreaArticoloAsync(request.Payload),
                 "articoli.aggiungiLavorazione" => await AggiungiLavorazioneAsync(request.Payload),
                 "articoli.cambiaStato" => await CambiaStatoArticoloAsync(request.Payload),
+                "articoli.aggiungiFoto" => await AggiungiFotoAsync(request.Payload),
+                "articoli.eliminaFoto" => await EliminaFotoAsync(request.Payload),
                 _ => throw new InvalidOperationException($"Comando non riconosciuto: {request.Command}"),
             };
 
@@ -148,11 +151,19 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                 workDetails.Add(new ItemWorkDetailDto(work, artisanName));
             }
 
+            var photos = await runtime.Orders.Photos.ListByItemAsync(item.ItemId);
+            var photoDetails = new List<PhotoDto>();
+            foreach (var photo in photos)
+            {
+                photoDetails.Add(await ToPhotoDtoAsync(photo));
+            }
+
             itemDetails.Add(new ItemDetailDto(
                 item,
                 categoryNames.GetValueOrDefault(item.CategoryId, "—"),
                 brandNames.GetValueOrDefault(item.BrandId, "—"),
-                workDetails));
+                workDetails,
+                photoDetails));
         }
 
         var customerName = customer is null
@@ -407,6 +418,63 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
             ?? throw new InvalidOperationException("Articolo non trovato dopo l'aggiornamento.");
     }
 
+    /// <summary>
+    /// Riceve una fotografia già pronta come immagine (scattata con la webcam direttamente nella
+    /// pagina, o scelta da file e letta lì): la pagina manda i byte come testo base64 (eventualmente
+    /// con il prefisso "data:...;base64," che qui viene tolto) insieme all'estensione da usare.
+    /// </summary>
+    private async Task<PhotoDto> AggiungiFotoAsync(JsonElement payload)
+    {
+        var itemId = RequireString(payload, "articoloId");
+        var immagineBase64 = RequireString(payload, "immagineBase64");
+        var estensione = RequireString(payload, "estensione");
+        var sorgente = OptionalString(payload, "sorgente") ?? "WEBCAM";
+        var nomeFile = OptionalString(payload, "nomeFile");
+
+        byte[] bytes;
+        try
+        {
+            bytes = Convert.FromBase64String(EstraiBase64(immagineBase64));
+        }
+        catch (FormatException exception)
+        {
+            throw new ArgumentException("Dati fotografia non validi.", exception);
+        }
+
+        var photo = await runtime.Orders.Photos.AddAsync(itemId, bytes, estensione, sorgente, nomeFile);
+        return await ToPhotoDtoAsync(photo);
+    }
+
+    private async Task<object> EliminaFotoAsync(JsonElement payload)
+    {
+        var fotoId = RequireString(payload, "fotoId");
+        var rowVersion = RequireInt(payload, "rowVersion");
+        await runtime.Orders.Photos.DeleteAsync(fotoId, rowVersion);
+        return new { ok = true };
+    }
+
+    private static string EstraiBase64(string valore)
+    {
+        var virgola = valore.IndexOf(',');
+        return valore.StartsWith("data:", StringComparison.OrdinalIgnoreCase) && virgola >= 0
+            ? valore[(virgola + 1)..]
+            : valore;
+    }
+
+    private async Task<PhotoDto> ToPhotoDtoAsync(PhotoRecord photo)
+    {
+        var absolutePath = Path.Combine(runtime.Paths.PhotosRoot, photo.RelativePath);
+        var bytes = await File.ReadAllBytesAsync(absolutePath);
+        var mime = photo.Extension switch
+        {
+            ".png" => "image/png",
+            ".webp" => "image/webp",
+            _ => "image/jpeg",
+        };
+        var dataUrl = $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
+        return new PhotoDto(photo.PhotoId, photo.ItemId, dataUrl, photo.OriginalFilename, photo.AcquiredAt, photo.Source, photo.SortOrder, photo.RowVersion);
+    }
+
     private static string RequireString(JsonElement payload, string propertyName)
     {
         if (payload.ValueKind == JsonValueKind.Object
@@ -475,9 +543,20 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
 /// <summary>Tutto ciò che serve alla schermata di dettaglio di una commessa, già pronto per la pagina.</summary>
 internal sealed record OrderDetailDto(OrderRecord Order, string CustomerName, OrderFinancials Financials, IReadOnlyList<ItemDetailDto> Items);
 
-internal sealed record ItemDetailDto(ItemRecord Item, string CategoryName, string BrandName, IReadOnlyList<ItemWorkDetailDto> Works);
+internal sealed record ItemDetailDto(ItemRecord Item, string CategoryName, string BrandName, IReadOnlyList<ItemWorkDetailDto> Works, IReadOnlyList<PhotoDto> Photos);
 
 internal sealed record ItemWorkDetailDto(ItemWorkRecord Work, string? ArtisanName);
+
+/// <summary>Fotografia pronta per la pagina: l'immagine è già inclusa come data URL, così la pagina la mostra senza un'altra richiesta.</summary>
+internal sealed record PhotoDto(
+    string PhotoId,
+    string ItemId,
+    string DataUrl,
+    string? OriginalFilename,
+    string AcquiredAt,
+    string Source,
+    int SortOrder,
+    int RowVersion);
 
 internal sealed record BridgeRequest(
     [property: JsonPropertyName("requestId")] string RequestId,
