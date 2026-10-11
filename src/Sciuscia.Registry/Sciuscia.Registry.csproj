@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Sciuscia.Registry</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Solo Sciuscia.Data (AppPaths/DatabaseInitializer/FoundationOptions), non
+         Sciuscia.Foundations: Foundations referenzia già Registry per il proprio autotest,
+         quindi Registry non deve referenziare Foundations per non creare un ciclo. -->
+    <ProjectReference Include="..\Sciuscia.Data\Sciuscia.Data.csproj" />
+  </ItemGroup>
+</Project>

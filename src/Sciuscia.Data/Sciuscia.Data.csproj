@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- Namespace storico Sciuscia.Foundations mantenuto di proposito nei file di questo
+         progetto (AppPaths, DatabaseInitializer, FoundationOptions): sono le fondamenta dati
+         condivise sia dal blocco Fondazioni sia dal blocco Anagrafiche. Il progetto si chiama
+         Sciuscia.Data per evitare un riferimento circolare (Anagrafiche -> Fondazioni ->
+         Anagrafiche), ma il codice resta nello stesso namespace per non dover toccare tutti gli
+         "using" già scritti altrove. -->
+    <RootNamespace>Sciuscia.Foundations</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\database\001_schema_solo_lab.sql"
+                      Link="Database\001_schema_solo_lab.sql" />
+  </ItemGroup>
+</Project>

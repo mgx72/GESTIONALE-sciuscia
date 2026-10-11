@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Sciuscia.Ui</AssemblyName>
+    <RootNamespace>Sciuscia.Ui</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Controllo WebView2: mostra le schermate (HTML/CSS/JS in wwwroot) dentro una finestra
+         Windows normale. Versione fissata per una compilazione ripetibile. -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Solo Sciuscia.Foundations: raccoglie già Anagrafiche, Commesse e Operazioni tramite
+         FoundationRuntime, quindi l'interfaccia grafica non deve referenziare ciascun blocco
+         separatamente. -->
+    <ProjectReference Include="..\Sciuscia.Foundations\Sciuscia.Foundations.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Le pagine della schermata (HTML/CSS/JS) vengono copiate accanto all'eseguibile. -->
+    <None Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Sciuscia.Operations</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Solo Sciuscia.Data (AppPaths/DatabaseInitializer/FoundationOptions/NumberingService):
+         come Registry e Orders, questo progetto non referenzia Foundations, Registry o Orders
+         per non creare cicli. Commesse e articoli referenziati qui sono validati dal database
+         stesso (foreign key attive su ogni connessione, vedi OpenReadyConnectionAsync). -->
+    <ProjectReference Include="..\Sciuscia.Data\Sciuscia.Data.csproj" />
+  </ItemGroup>
+</Project>

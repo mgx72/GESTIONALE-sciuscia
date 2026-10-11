@@ -1,0 +1,511 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --border: #dfe3e8;
+  --text: #1f2933;
+  --text-muted: #6b7280;
+  --primary: #1f6f5c;
+  --primary-dark: #17564a;
+  --danger: #b3261e;
+  --danger-bg: #fdecea;
+  --sidebar-bg: #17313a;
+  --sidebar-text: #d7e2e2;
+  --sidebar-active: #1f6f5c;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+#app {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 220px;
+  flex: 0 0 auto;
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 0;
+}
+
+.sidebar h1 {
+  font-size: 16px;
+  margin: 0 20px 24px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.nav-item {
+  display: block;
+  padding: 12px 20px;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+
+.nav-item.active {
+  background: rgba(255,255,255,0.08);
+  border-left-color: var(--sidebar-active);
+  color: #fff;
+  font-weight: 600;
+}
+
+.nav-item.disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.main {
+  flex: 1 1 auto;
+  padding: 28px 32px;
+  overflow-y: auto;
+}
+
+.main-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.main-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  padding: 9px 16px;
+  color: var(--text);
+}
+
+button.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+button.primary:hover {
+  background: var(--primary-dark);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+thead th {
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: #fafbfc;
+}
+
+tbody td {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge.aperta {
+  background: #e7f4ee;
+  color: var(--primary);
+}
+
+.saldo-positivo {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.saldo-zero {
+  color: var(--text-muted);
+}
+
+.empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.error-banner {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid #f3c8c5;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+/* --- Finestra modale nuova commessa --- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 27, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.modal-overlay[hidden] {
+  display: none;
+}
+
+.modal {
+  width: 480px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+}
+
+.modal h3 {
+  margin: 0 0 4px;
+}
+
+.modal .subtitle {
+  color: var(--text-muted);
+  margin: 0 0 18px;
+  font-size: 13px;
+}
+
+.field {
+  margin-bottom: 14px;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.field input {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+}
+
+.customer-results {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-height: 160px;
+  overflow-y: auto;
+  margin-bottom: 14px;
+}
+
+.customer-results .result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.customer-results .result-row:last-child {
+  border-bottom: none;
+}
+
+.customer-results .result-row .name {
+  font-weight: 600;
+}
+
+.customer-results .result-row .mobile {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.new-customer-toggle {
+  background: none;
+  border: none;
+  color: var(--primary);
+  padding: 4px 0;
+  text-decoration: underline;
+}
+
+.new-customer-box {
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+  padding-top: 14px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.hint {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.field select {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  background: #fff;
+}
+
+.checkbox-field {
+  display: flex;
+  gap: 18px;
+}
+
+.checkbox-field label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 400;
+  font-size: 13px;
+}
+
+/* --- Elenco commesse: riga cliccabile --- */
+
+.riga-cliccabile td {
+  vertical-align: middle;
+}
+
+.btn-apri-commessa {
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+.badge.urgente {
+  background: var(--danger-bg);
+  color: var(--danger);
+  margin-left: 8px;
+}
+
+.badge.priorita {
+  background: #fff4e0;
+  color: #9a6400;
+  margin-left: 8px;
+}
+
+/* --- Dettaglio commessa --- */
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--primary);
+  padding: 0 0 6px;
+  font-size: 13px;
+  display: block;
+}
+
+.riepilogo-commessa {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.riepilogo-commessa .etichetta-riepilogo {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+
+.scheda-articolo {
+  padding: 16px 20px;
+  margin-bottom: 14px;
+}
+
+.scheda-articolo-intestazione {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.scheda-articolo-azioni {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.scheda-articolo-azioni select {
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  background: #fff;
+}
+
+.descrizione-articolo {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.lista-lavorazioni {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.nessuna-lavorazione {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.riga-lavorazione {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  font-size: 13px;
+}
+
+.riga-lavorazione:not(:last-child) {
+  border-bottom: 1px dashed var(--border);
+}
+
+.riga-lavorazione .nome-lavorazione {
+  font-weight: 600;
+  flex: 1 1 auto;
+}
+
+.riga-lavorazione .esecuzione-lavorazione {
+  color: var(--text-muted);
+}
+
+.riga-lavorazione .prezzo-lavorazione {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* --- Anagrafiche --- */
+
+.tabs-anagrafiche {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  padding: 10px 14px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.tab-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.tab-pane .main-header {
+  align-items: center;
+  gap: 12px;
+}
+
+.tab-pane .main-header input[type="text"] {
+  flex: 1 1 auto;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  max-width: 320px;
+}
+
+.subtitle-inline {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.stato-attivo {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.stato-inattivo {
+  color: var(--text-muted);
+}
+
+.azioni-riga {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.azioni-riga button {
+  padding: 5px 10px;
+  font-size: 12px;
+}

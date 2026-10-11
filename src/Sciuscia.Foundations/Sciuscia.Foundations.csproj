@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Sciuscia.Foundations</AssemblyName>
+    <RootNamespace>Sciuscia.Foundations</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- AppPaths, DatabaseInitializer e FoundationOptions vivono in Sciuscia.Data (namespace
+         Sciuscia.Foundations, invariato) per permettere anche a Sciuscia.Registry di usarli
+         senza creare un riferimento circolare. -->
+    <ProjectReference Include="..\Sciuscia.Data\Sciuscia.Data.csproj" />
+    <ProjectReference Include="..\Sciuscia.Registry\Sciuscia.Registry.csproj" />
+    <ProjectReference Include="..\Sciuscia.Orders\Sciuscia.Orders.csproj" />
+    <ProjectReference Include="..\Sciuscia.Operations\Sciuscia.Operations.csproj" />
+  </ItemGroup>
+</Project>
+

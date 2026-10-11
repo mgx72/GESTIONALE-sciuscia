@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <title>Gestionale Sciuscià</title>
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <div id="app">
+    <nav class="sidebar">
+      <h1>Sciuscià</h1>
+      <a class="nav-item active" data-view="commesse" id="nav-commesse">Commesse</a>
+      <a class="nav-item" data-view="anagrafiche" id="nav-anagrafiche">Anagrafiche</a>
+      <a class="nav-item disabled" title="Non ancora disponibile">Impostazioni</a>
+    </nav>
+
+    <main class="main">
+      <div id="error-banner" class="error-banner" hidden></div>
+
+      <div id="view-elenco-commesse">
+        <div class="main-header">
+          <h2>Commesse aperte</h2>
+          <button id="btn-nuova-commessa" class="primary">+ Nuova commessa</button>
+        </div>
+
+        <div class="panel">
+          <table id="tabella-commesse">
+            <thead>
+              <tr>
+                <th>Codice</th>
+                <th>Cliente</th>
+                <th>Articoli</th>
+                <th>Stato</th>
+                <th>Totale</th>
+                <th>Pagato</th>
+                <th>Saldo</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="corpo-tabella-commesse"></tbody>
+          </table>
+          <div id="stato-vuoto" class="empty-state" hidden>Nessuna commessa aperta al momento.</div>
+        </div>
+      </div>
+
+      <div id="view-dettaglio-commessa" hidden>
+        <div class="main-header">
+          <div>
+            <button type="button" id="btn-torna-elenco" class="link-button">&larr; Torna alle commesse</button>
+            <h2 id="dettaglio-titolo">Commessa</h2>
+          </div>
+          <button id="btn-nuovo-articolo" class="primary">+ Nuovo articolo</button>
+        </div>
+
+        <div class="panel riepilogo-commessa">
+          <div><span class="etichetta-riepilogo">Cliente</span><span id="dettaglio-cliente"></span></div>
+          <div><span class="etichetta-riepilogo">Ricevuta il</span><span id="dettaglio-data"></span></div>
+          <div><span class="etichetta-riepilogo">Totale</span><span id="dettaglio-totale"></span></div>
+          <div><span class="etichetta-riepilogo">Pagato</span><span id="dettaglio-pagato"></span></div>
+          <div><span class="etichetta-riepilogo">Saldo</span><span id="dettaglio-saldo"></span></div>
+        </div>
+
+        <div id="lista-articoli"></div>
+        <div id="dettaglio-stato-vuoto" class="empty-state" hidden>Questa commessa non ha ancora nessun articolo.</div>
+      </div>
+
+      <div id="view-anagrafiche" hidden>
+        <div class="main-header">
+          <h2>Anagrafiche</h2>
+        </div>
+
+        <div class="tabs-anagrafiche">
+          <button type="button" class="tab-btn active" data-tab="clienti">Clienti</button>
+          <button type="button" class="tab-btn" data-tab="categorie">Categorie</button>
+          <button type="button" class="tab-btn" data-tab="marche">Marche</button>
+          <button type="button" class="tab-btn" data-tab="artigiani">Artigiani</button>
+          <button type="button" class="tab-btn" data-tab="listino">Listino lavorazioni</button>
+        </div>
+
+        <div class="tab-pane" id="tab-clienti">
+          <div class="main-header">
+            <input type="text" id="ricerca-clienti-anagrafica" placeholder="Cerca per cognome o cellulare..." autocomplete="off" />
+            <button type="button" id="btn-nuovo-cliente-anagrafica" class="primary">+ Nuovo cliente</button>
+          </div>
+          <div class="panel">
+            <table>
+              <thead><tr><th>Cognome e nome</th><th>Cellulare</th><th>Email</th><th>Stato</th><th></th></tr></thead>
+              <tbody id="corpo-tabella-clienti-anagrafica"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="tab-pane" id="tab-categorie" hidden>
+          <div class="main-header">
+            <p class="subtitle-inline">Le categorie descrivono il tipo di articolo (scarpe, borse, cinture...).</p>
+            <button type="button" id="btn-nuova-categoria-anagrafica" class="primary">+ Nuova categoria</button>
+          </div>
+          <div class="panel">
+            <table>
+              <thead><tr><th>Nome</th><th>Stato</th><th></th></tr></thead>
+              <tbody id="corpo-tabella-categorie-anagrafica"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="tab-pane" id="tab-marche" hidden>
+          <div class="main-header">
+            <p class="subtitle-inline">Le marche degli articoli portati dai clienti.</p>
+            <button type="button" id="btn-nuova-marca-anagrafica" class="primary">+ Nuova marca</button>
+          </div>
+          <div class="panel">
+            <table>
+              <thead><tr><th>Nome</th><th>Stato</th><th></th></tr></thead>
+              <tbody id="corpo-tabella-marche-anagrafica"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="tab-pane" id="tab-artigiani" hidden>
+          <div class="main-header">
+            <p class="subtitle-inline">Gli artigiani esterni a cui si affidano le lavorazioni esterne.</p>
+            <button type="button" id="btn-nuovo-artigiano-anagrafica" class="primary">+ Nuovo artigiano</button>
+          </div>
+          <div class="panel">
+            <table>
+              <thead><tr><th>Nome</th><th>Telefono</th><th>Email</th><th>Stato</th><th></th></tr></thead>
+              <tbody id="corpo-tabella-artigiani-anagrafica"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="tab-pane" id="tab-listino" hidden>
+          <div class="main-header">
+            <p class="subtitle-inline">Le lavorazioni disponibili da scegliere quando si aggiunge una lavorazione a un articolo.</p>
+            <button type="button" id="btn-nuova-lavorazione-listino" class="primary">+ Nuova lavorazione</button>
+          </div>
+          <div class="panel">
+            <table>
+              <thead><tr><th>Nome</th><th>Testo etichetta</th><th>Esecuzione</th><th>Prezzo</th><th>Stato</th><th></th></tr></thead>
+              <tbody id="corpo-tabella-listino-anagrafica"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="modal-nuovo-articolo" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3>Nuovo articolo</h3>
+      <p class="subtitle">Aggiungi un articolo a questa commessa.</p>
+
+      <div class="field">
+        <label for="articolo-categoria">Categoria *</label>
+        <select id="articolo-categoria"></select>
+        <button type="button" id="btn-mostra-nuova-categoria" class="new-customer-toggle">+ La categoria non c'è ancora, creala</button>
+        <div id="box-nuova-categoria" class="new-customer-box" hidden>
+          <div class="field">
+            <label for="nuova-categoria-nome">Nome categoria *</label>
+            <input type="text" id="nuova-categoria-nome" placeholder="Es. Scarpe, Borse, Cinture..." />
+          </div>
+          <button type="button" id="btn-crea-categoria" class="primary">Crea categoria</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="articolo-marca">Marca</label>
+        <select id="articolo-marca"></select>
+        <button type="button" id="btn-mostra-nuova-marca" class="new-customer-toggle">+ La marca non c'è ancora, creala</button>
+        <div id="box-nuova-marca" class="new-customer-box" hidden>
+          <div class="field">
+            <label for="nuova-marca-nome">Nome marca *</label>
+            <input type="text" id="nuova-marca-nome" />
+          </div>
+          <button type="button" id="btn-crea-marca" class="primary">Crea marca</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="articolo-descrizione">Descrizione *</label>
+        <input type="text" id="articolo-descrizione" placeholder="Es. Scarpa nera con tacco da risuolare" />
+      </div>
+      <div class="field">
+        <label for="articolo-scadenza">Data prevista di consegna</label>
+        <input type="date" id="articolo-scadenza" />
+      </div>
+      <div class="field checkbox-field">
+        <label><input type="checkbox" id="articolo-urgente" /> Urgente</label>
+        <label><input type="checkbox" id="articolo-priorita" /> Priorità</label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="btn-annulla-articolo">Annulla</button>
+        <button type="button" id="btn-crea-articolo" class="primary">Aggiungi articolo</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-lavorazione" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3>Aggiungi lavorazione</h3>
+      <p class="subtitle" id="lavorazione-articolo-codice"></p>
+
+      <div class="field">
+        <label for="lavorazione-tipo">Scegli dal listino, oppure scrivi una lavorazione tua</label>
+        <select id="lavorazione-tipo"></select>
+        <p class="hint">Scegliendo una voce dal listino, i campi qui sotto si riempiono da soli (ma restano modificabili). Se lasci "— nessuna, la scrivo io —", scrivi tu il nome e il testo qui sotto.</p>
+      </div>
+      <div class="field" id="campo-fascia" hidden>
+        <label for="lavorazione-fascia">Fascia di prezzo *</label>
+        <select id="lavorazione-fascia"></select>
+      </div>
+      <div class="field">
+        <label for="lavorazione-nome">Nome della lavorazione *</label>
+        <input type="text" id="lavorazione-nome" placeholder="Es. Risuolatura completa" />
+        <p class="hint">Il nome con cui questa lavorazione resta scritta nella commessa (uso interno, non finisce sull'etichetta).</p>
+      </div>
+      <div class="field">
+        <label for="lavorazione-etichetta">Testo per il cartellino da attaccare alla scarpa *</label>
+        <input type="text" id="lavorazione-etichetta" placeholder="Es. Risuola" />
+        <p class="hint">Un testo breve: è quello che verrà stampato sull'etichetta fisica attaccata all'articolo, quindi meglio corto e chiaro.</p>
+      </div>
+      <div class="field">
+        <label for="lavorazione-prezzo">Prezzo (euro)</label>
+        <input type="number" step="0.01" min="0" id="lavorazione-prezzo" placeholder="Lascia vuoto se da definire" />
+      </div>
+      <div class="field checkbox-field">
+        <label><input type="checkbox" id="lavorazione-esterna" /> Lavorazione esterna (affidata a un artigiano)</label>
+      </div>
+      <div class="field" id="campo-artigiano" hidden>
+        <label for="lavorazione-artigiano">Artigiano *</label>
+        <select id="lavorazione-artigiano"></select>
+        <button type="button" id="btn-mostra-nuovo-artigiano" class="new-customer-toggle">+ L'artigiano non c'è ancora, crealo</button>
+        <div id="box-nuovo-artigiano" class="new-customer-box" hidden>
+          <div class="field">
+            <label for="nuovo-artigiano-nome">Nome artigiano *</label>
+            <input type="text" id="nuovo-artigiano-nome" />
+          </div>
+          <button type="button" id="btn-crea-artigiano" class="primary">Crea artigiano</button>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="btn-annulla-lavorazione">Annulla</button>
+        <button type="button" id="btn-crea-lavorazione" class="primary">Aggiungi lavorazione</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-cliente-anagrafica" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3 id="titolo-modal-cliente">Nuovo cliente</h3>
+
+      <div class="field">
+        <label for="cliente-anagrafica-cognome">Cognome *</label>
+        <input type="text" id="cliente-anagrafica-cognome" />
+      </div>
+      <div class="field">
+        <label for="cliente-anagrafica-nome">Nome</label>
+        <input type="text" id="cliente-anagrafica-nome" />
+      </div>
+      <div class="field">
+        <label for="cliente-anagrafica-cellulare">Cellulare</label>
+        <input type="text" id="cliente-anagrafica-cellulare" />
+      </div>
+      <div class="field">
+        <label for="cliente-anagrafica-email">Email</label>
+        <input type="text" id="cliente-anagrafica-email" />
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="btn-annulla-cliente-anagrafica">Annulla</button>
+        <button type="button" id="btn-salva-cliente-anagrafica" class="primary">Salva</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-categoria-anagrafica" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3 id="titolo-modal-categoria">Nuova categoria</h3>
+      <div class="field">
+        <label for="categoria-anagrafica-nome">Nome *</label>
+        <input type="text" id="categoria-anagrafica-nome" placeholder="Es. Scarpe, Borse, Cinture..." />
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-annulla-categoria-anagrafica">Annulla</button>
+        <button type="button" id="btn-salva-categoria-anagrafica" class="primary">Salva</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-marca-anagrafica" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3 id="titolo-modal-marca-anagrafica">Nuova marca</h3>
+      <div class="field">
+        <label for="marca-anagrafica-nome">Nome *</label>
+        <input type="text" id="marca-anagrafica-nome" />
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-annulla-marca-anagrafica">Annulla</button>
+        <button type="button" id="btn-salva-marca-anagrafica" class="primary">Salva</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-artigiano-anagrafica" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3 id="titolo-modal-artigiano">Nuovo artigiano</h3>
+      <div class="field">
+        <label for="artigiano-anagrafica-nome">Nome *</label>
+        <input type="text" id="artigiano-anagrafica-nome" />
+      </div>
+      <div class="field">
+        <label for="artigiano-anagrafica-contatto">Persona di riferimento</label>
+        <input type="text" id="artigiano-anagrafica-contatto" />
+      </div>
+      <div class="field">
+        <label for="artigiano-anagrafica-telefono">Telefono</label>
+        <input type="text" id="artigiano-anagrafica-telefono" />
+      </div>
+      <div class="field">
+        <label for="artigiano-anagrafica-email">Email</label>
+        <input type="text" id="artigiano-anagrafica-email" />
+      </div>
+      <div class="field">
+        <label for="artigiano-anagrafica-indirizzo">Indirizzo</label>
+        <input type="text" id="artigiano-anagrafica-indirizzo" />
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-annulla-artigiano-anagrafica">Annulla</button>
+        <button type="button" id="btn-salva-artigiano-anagrafica" class="primary">Salva</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-lavorazione-listino" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3 id="titolo-modal-listino">Nuova lavorazione nel listino</h3>
+      <div class="field">
+        <label for="listino-nome">Nome della lavorazione *</label>
+        <input type="text" id="listino-nome" placeholder="Es. Risuolatura completa" />
+      </div>
+      <div class="field">
+        <label for="listino-etichetta">Testo per il cartellino *</label>
+        <input type="text" id="listino-etichetta" placeholder="Es. Risuola" />
+      </div>
+      <div class="field">
+        <label for="listino-esecuzione">Esecuzione predefinita</label>
+        <select id="listino-esecuzione">
+          <option value="INTERNA" selected>Interna</option>
+          <option value="ESTERNA">Esterna</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="listino-modalita-prezzo">Modalità di prezzo</label>
+        <select id="listino-modalita-prezzo">
+          <option value="FISSO">Prezzo fisso</option>
+          <option value="FASCE">A fasce (A/B/C)</option>
+          <option value="DA_DEFINIRE" selected>Da definire ogni volta</option>
+        </select>
+      </div>
+      <div class="field" id="campo-listino-prezzo-fisso" hidden>
+        <label for="listino-prezzo-fisso">Prezzo standard (euro)</label>
+        <input type="number" step="0.01" min="0" id="listino-prezzo-fisso" />
+      </div>
+      <div class="field" id="campo-listino-fasce" hidden>
+        <p class="hint">Dopo aver creato la lavorazione, potrai impostare il prezzo di ogni fascia (A, B, C) dalla tabella del listino.</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-annulla-listino">Annulla</button>
+        <button type="button" id="btn-salva-listino" class="primary">Crea lavorazione</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-fasce-listino" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3 id="titolo-modal-fasce">Fasce di prezzo</h3>
+      <p class="subtitle" id="sottotitolo-modal-fasce"></p>
+      <div class="field">
+        <label for="fascia-listino-a">Fascia A — prezzo (euro)</label>
+        <input type="number" step="0.01" min="0" id="fascia-listino-a" />
+      </div>
+      <div class="field">
+        <label for="fascia-listino-b">Fascia B — prezzo (euro)</label>
+        <input type="number" step="0.01" min="0" id="fascia-listino-b" />
+      </div>
+      <div class="field">
+        <label for="fascia-listino-c">Fascia C — prezzo (euro)</label>
+        <input type="number" step="0.01" min="0" id="fascia-listino-c" />
+      </div>
+      <p class="hint">Lascia vuoto un campo se quella fascia non serve per questa lavorazione.</p>
+      <div class="modal-actions">
+        <button type="button" id="btn-annulla-fasce-listino">Chiudi</button>
+        <button type="button" id="btn-salva-fasce-listino" class="primary">Salva fasce</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-nuova-commessa" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3>Nuova commessa</h3>
+      <p class="subtitle">Cerca il cliente per cognome o numero di cellulare.</p>
+
+      <div class="field">
+        <label for="ricerca-cliente">Cliente</label>
+        <input type="text" id="ricerca-cliente" placeholder="Cognome o cellulare..." autocomplete="off" />
+      </div>
+
+      <div id="risultati-clienti" class="customer-results" hidden></div>
+
+      <button type="button" id="btn-mostra-nuovo-cliente" class="new-customer-toggle">
+        + Il cliente non esiste ancora, crealo
+      </button>
+
+      <div id="box-nuovo-cliente" class="new-customer-box" hidden>
+        <div class="field">
+          <label for="nuovo-cognome">Cognome *</label>
+          <input type="text" id="nuovo-cognome" />
+        </div>
+        <div class="field">
+          <label for="nuovo-nome">Nome</label>
+          <input type="text" id="nuovo-nome" />
+        </div>
+        <div class="field">
+          <label for="nuovo-cellulare">Cellulare</label>
+          <input type="text" id="nuovo-cellulare" />
+        </div>
+        <button type="button" id="btn-crea-cliente" class="primary">Crea cliente e apri commessa</button>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="btn-annulla-commessa">Annulla</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="bridge.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
