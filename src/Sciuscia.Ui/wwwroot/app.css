@@ -709,4 +709,16 @@ tbody tr:last-child td {
     padding: 6px 8px;
     text-align: left;
   }
+
+  .pagina-stampa-successiva {
+    page-break-before: always;
+  }
+}
+
+.selezione-tutti-articoli {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+  margin: 6px 0;
 }

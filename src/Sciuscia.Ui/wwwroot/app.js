@@ -370,6 +370,8 @@
       return;
     }
     document.getElementById("pagamento-commessa-codice").textContent = "Commessa " + dettaglioCorrente.order.visibleCode;
+    document.getElementById("pagamento-saldo-residuo").textContent =
+      "Saldo residuo da pagare: " + formattaEuro(dettaglioCorrente.financials.balanceCents);
     document.getElementById("pagamento-importo").value = "";
     document.getElementById("pagamento-tipo").value = "CONTANTI";
     modalePagamento.hidden = false;
@@ -451,17 +453,18 @@
     }
     ritiriStatoVuoto.hidden = true;
 
-    const codiciPerId = {};
+    const descrizionePerId = {};
     for (const dettaglioArticolo of dettaglio.items) {
-      codiciPerId[dettaglioArticolo.item.itemId] = dettaglioArticolo.item.visibleCode;
+      descrizionePerId[dettaglioArticolo.item.itemId] =
+        dettaglioArticolo.item.visibleCode + " (" + dettaglioArticolo.item.description + ")";
     }
 
     for (const ritiro of dettaglio.pickups) {
-      const codici = (ritiro.itemIds || []).map((id) => codiciPerId[id] || id).join(", ");
+      const articoli = (ritiro.itemIds || []).map((id) => descrizionePerId[id] || id).join("; ");
       const riga = document.createElement("tr");
       riga.innerHTML = `
         <td>${formattaData(ritiro.occurredAt)}</td>
-        <td>${escapeHtml(codici)}</td>
+        <td>${escapeHtml(articoli)}</td>
         <td>${escapeHtml(ritiro.notes || "")}</td>
       `;
       corpoTabellaRitiri.appendChild(riga);
@@ -472,6 +475,7 @@
     if (!dettaglioCorrente) {
       return;
     }
+    document.getElementById("ritiro-commessa-codice").textContent = "Commessa " + dettaglioCorrente.order.visibleCode;
     const lista = document.getElementById("ritiro-lista-articoli");
     lista.innerHTML = "";
     const articoliDaRitirare = dettaglioCorrente.items.filter(
@@ -485,7 +489,7 @@
       checkbox.value = dettaglioArticolo.item.itemId;
       etichetta.appendChild(checkbox);
       etichetta.appendChild(document.createTextNode(
-        " " + dettaglioArticolo.item.visibleCode + " — " + dettaglioArticolo.item.description
+        " " + dettaglioArticolo.item.visibleCode + " — " + dettaglioArticolo.categoryName + " — " + dettaglioArticolo.item.description
       ));
       lista.appendChild(etichetta);
     }
@@ -550,8 +554,7 @@
         return "Gentile cliente, il preventivo per la commessa " + codice + " è di " +
           formattaEuro(dettaglio.financials.totalCents) + ". Fateci sapere se possiamo procedere.";
       case "SOLLECITO":
-        return "Gentile cliente, le ricordiamo che l'articolo della commessa " + codice +
-          " è pronto per il ritiro da qualche giorno.";
+        return "Gentile cliente, le ricordiamo che i suoi capi sono pronti per il ritiro.";
       default:
         return "";
     }
@@ -588,6 +591,7 @@
     document.getElementById("messaggio-destinatario").value = "";
     aggiornaDestinatarioMessaggio();
 
+    document.getElementById("messaggio-seleziona-tutti").checked = false;
     const lista = document.getElementById("messaggio-lista-articoli");
     lista.innerHTML = "";
     for (const dettaglioArticolo of dettaglioCorrente.items) {
@@ -597,7 +601,7 @@
       checkbox.value = dettaglioArticolo.item.itemId;
       etichetta.appendChild(checkbox);
       etichetta.appendChild(document.createTextNode(
-        " " + dettaglioArticolo.item.visibleCode + " — " + dettaglioArticolo.item.description
+        " " + dettaglioArticolo.item.visibleCode + " — " + dettaglioArticolo.categoryName + " — " + dettaglioArticolo.item.description
       ));
       lista.appendChild(etichetta);
     }
@@ -693,13 +697,27 @@
   }
 
   function costruisciContenutoRicevuta(dettaglio) {
-    const righe = dettaglio.items.map((d) =>
-      "<tr><td>" + escapeHtml(d.item.visibleCode) + "</td><td>" + escapeHtml(d.item.description) + "</td></tr>"
-    ).join("");
+    const righe = dettaglio.items.map((d) => {
+      const scadenza = d.item.dueDate ? formattaData(d.item.dueDate) : "—";
+      const urgente = d.item.isUrgent ? "Sì" : "—";
+      const priorita = d.item.isPriority ? "Sì" : "—";
+      return "<tr>" +
+        "<td>" + escapeHtml(d.item.visibleCode) + "</td>" +
+        "<td>" + escapeHtml(d.categoryName) + "</td>" +
+        "<td>" + escapeHtml(d.brandName) + "</td>" +
+        "<td>" + escapeHtml(d.item.description) + "</td>" +
+        "<td>" + escapeHtml(scadenza) + "</td>" +
+        "<td>" + escapeHtml(urgente) + "</td>" +
+        "<td>" + escapeHtml(priorita) + "</td>" +
+        "</tr>";
+    }).join("");
     return `
       <p>Cliente: ${escapeHtml(dettaglio.customerName)}</p>
       <p>Commessa: ${escapeHtml(dettaglio.order.visibleCode)} del ${formattaData(dettaglio.order.receivedAt)}</p>
-      <table><thead><tr><th>Codice</th><th>Descrizione</th></tr></thead><tbody>${righe}</tbody></table>
+      <table>
+        <thead><tr><th>Codice</th><th>Categoria</th><th>Marca</th><th>Descrizione</th><th>Consegna prevista</th><th>Urgente</th><th>Priorità</th></tr></thead>
+        <tbody>${righe}</tbody>
+      </table>
       <p>Totale: ${formattaEuro(dettaglio.financials.totalCents)} — Pagato: ${formattaEuro(dettaglio.financials.paidCents)} — Saldo: ${formattaEuro(dettaglio.financials.balanceCents)}</p>
     `;
   }
@@ -716,26 +734,30 @@
   /// Prepara il contenuto da stampare nell'area dedicata (invisibile a schermo, visibile solo
   /// nel documento stampato) e apre la finestra di stampa del PC; la registrazione dell'esito
   /// avviene dopo, quando il browser avvisa che la stampa è conclusa (evento "afterprint").
-  function stampaDocumento(tipoDocumento, articoloId, titolo, contenutoHtml) {
-    stampaInCorso = { tipoDocumento, articoloId };
+  /// "voci" è un elenco di {tipoDocumento, articoloId}: più di una voce quando con un'unica
+  /// stampa (ad esempio "Stampa entrambe insieme") si producono più pagine da registrare insieme.
+  function stampaDocumenti(voci, titolo, contenutoHtml) {
+    stampaInCorso = voci;
     areaStampaContenuto.innerHTML = "<h2>" + escapeHtml(titolo) + "</h2>" + contenutoHtml;
     window.print();
   }
 
   window.addEventListener("afterprint", async () => {
-    if (!stampaInCorso || !commessaCorrenteId) {
+    if (!stampaInCorso || stampaInCorso.length === 0 || !commessaCorrenteId) {
       return;
     }
-    const { tipoDocumento, articoloId } = stampaInCorso;
+    const voci = stampaInCorso;
     stampaInCorso = null;
     nascondiErrore();
     try {
-      await window.sciuscia.call("operazioni.registraStampa", {
-        commessaId: commessaCorrenteId,
-        articoloId,
-        tipoDocumento,
-        esito: "RIUSCITA",
-      });
+      for (const { tipoDocumento, articoloId } of voci) {
+        await window.sciuscia.call("operazioni.registraStampa", {
+          commessaId: commessaCorrenteId,
+          articoloId,
+          tipoDocumento,
+          esito: "RIUSCITA",
+        });
+      }
       await ricaricaDettaglioCommessa();
     } catch (errore) {
       mostraErrore("Non è stato possibile registrare la stampa: " + errore.message);
@@ -785,7 +807,11 @@
     scheda.querySelector(".btn-aggiungi-lavorazione").addEventListener("click", () => apriModaleLavorazione(articolo.itemId, articolo.visibleCode));
     scheda.querySelector(".btn-aggiungi-foto").addEventListener("click", () => apriModaleFoto(articolo.itemId, articolo.visibleCode));
     scheda.querySelector(".btn-aggiungi-etichetta").addEventListener("click", () =>
-      stampaDocumento("ETICHETTA", articolo.itemId, "Etichetta " + articolo.visibleCode, costruisciContenutoEtichetta(dettaglioArticolo))
+      stampaDocumenti(
+        [{ tipoDocumento: "ETICHETTA", articoloId: articolo.itemId }],
+        "Etichetta " + articolo.visibleCode,
+        costruisciContenutoEtichetta(dettaglioArticolo)
+      )
     );
 
     const listaLavorazioni = scheda.querySelector(".lista-lavorazioni");
@@ -1363,18 +1389,46 @@
       document.getElementById("messaggio-testo").value = testoMessaggioPredefinito(evento.target.value, dettaglioCorrente);
     }
   });
+  document.getElementById("messaggio-seleziona-tutti").addEventListener("change", (evento) => {
+    document.querySelectorAll("#messaggio-lista-articoli input[type=checkbox]").forEach((casella) => {
+      casella.checked = evento.target.checked;
+    });
+  });
 
   document.getElementById("btn-stampa-ricevuta").addEventListener("click", () => {
     if (!dettaglioCorrente) {
       return;
     }
-    stampaDocumento("COPIA_CLIENTE", null, "Ricevuta — Commessa " + dettaglioCorrente.order.visibleCode, costruisciContenutoRicevuta(dettaglioCorrente));
+    stampaDocumenti(
+      [{ tipoDocumento: "COPIA_CLIENTE", articoloId: null }],
+      "Ricevuta — Commessa " + dettaglioCorrente.order.visibleCode,
+      costruisciContenutoRicevuta(dettaglioCorrente)
+    );
   });
   document.getElementById("btn-stampa-interna").addEventListener("click", () => {
     if (!dettaglioCorrente) {
       return;
     }
-    stampaDocumento("COPIA_INTERNA", null, "Copia interna — Commessa " + dettaglioCorrente.order.visibleCode, costruisciContenutoRicevuta(dettaglioCorrente));
+    stampaDocumenti(
+      [{ tipoDocumento: "COPIA_INTERNA", articoloId: null }],
+      "Copia interna — Commessa " + dettaglioCorrente.order.visibleCode,
+      costruisciContenutoRicevuta(dettaglioCorrente)
+    );
+  });
+  document.getElementById("btn-stampa-entrambe").addEventListener("click", () => {
+    if (!dettaglioCorrente) {
+      return;
+    }
+    const contenuto = costruisciContenutoRicevuta(dettaglioCorrente);
+    stampaDocumenti(
+      [
+        { tipoDocumento: "COPIA_CLIENTE", articoloId: null },
+        { tipoDocumento: "COPIA_INTERNA", articoloId: null },
+      ],
+      "Commessa " + dettaglioCorrente.order.visibleCode,
+      '<div class="pagina-stampa"><h3>Copia per il cliente</h3>' + contenuto + "</div>" +
+        '<div class="pagina-stampa pagina-stampa-successiva"><h3>Copia interna</h3>' + contenuto + "</div>"
+    );
   });
 
   document.getElementById("btn-torna-elenco").addEventListener("click", () => {

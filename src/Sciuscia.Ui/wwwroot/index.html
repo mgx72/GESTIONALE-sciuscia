@@ -106,6 +106,7 @@
           <div class="azioni-stampa">
             <button type="button" id="btn-stampa-ricevuta">Stampa ricevuta per il cliente</button>
             <button type="button" id="btn-stampa-interna">Stampa copia interna</button>
+            <button type="button" id="btn-stampa-entrambe" class="primary">Stampa entrambe insieme</button>
           </div>
           <p class="hint">Dopo aver stampato (o annullato la stampa), il risultato viene registrato qui sotto.</p>
           <table>
@@ -342,6 +343,7 @@
     <div class="modal">
       <h3>Registra pagamento</h3>
       <p class="subtitle" id="pagamento-commessa-codice"></p>
+      <p class="hint" id="pagamento-saldo-residuo"></p>
 
       <div class="field">
         <label for="pagamento-importo">Importo (euro) *</label>
@@ -390,7 +392,8 @@
   <div id="modal-ritiro" class="modal-overlay" hidden>
     <div class="modal">
       <h3>Registra ritiro</h3>
-      <p class="subtitle">Seleziona gli articoli che il cliente sta ritirando ora. Diventeranno "Consegnato".</p>
+      <p class="subtitle" id="ritiro-commessa-codice"></p>
+      <p class="hint">Seleziona gli articoli che il cliente sta ritirando ora. Diventeranno "Consegnato".</p>
 
       <div id="ritiro-lista-articoli" class="lista-selezione-articoli"></div>
       <p class="hint" id="ritiro-nessun-articolo" hidden>Non ci sono articoli ancora da ritirare su questa commessa.</p>
@@ -442,6 +445,9 @@
       </div>
       <div class="field">
         <label>Articoli a cui si riferisce (facoltativo)</label>
+        <label class="selezione-tutti-articoli">
+          <input type="checkbox" id="messaggio-seleziona-tutti" /> Tutti gli articoli della commessa
+        </label>
         <div id="messaggio-lista-articoli" class="lista-selezione-articoli"></div>
       </div>
 
