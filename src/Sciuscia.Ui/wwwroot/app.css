@@ -618,3 +618,95 @@ tbody tr:last-child td {
   padding: 5px 10px;
   font-size: 12px;
 }
+
+/* --- Operazioni (pagamenti, ritiri, messaggi, stampe) --- */
+
+.pannello-operazioni {
+  margin-top: 16px;
+}
+
+.pannello-operazioni h3 {
+  margin: 0;
+}
+
+.pannello-operazioni table {
+  margin-top: 10px;
+}
+
+.azioni-stampa {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.lista-selezione-articoli {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.lista-selezione-articoli label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+}
+
+.btn-aggiungi-etichetta {
+  margin-left: 6px;
+}
+
+.importo-negativo {
+  color: var(--danger, #c0392b);
+}
+
+.importo-positivo {
+  color: var(--primary);
+}
+
+/* L'area di stampa resta invisibile a schermo e appare solo nel documento stampato:
+   è il trucco classico per stampare solo un contenuto preparato apposta, senza il resto
+   della pagina (menu, pulsanti, altre commesse...). */
+#area-stampa {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #area-stampa,
+  #area-stampa * {
+    visibility: visible;
+  }
+
+  #area-stampa {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 24px;
+  }
+
+  #area-stampa-contenuto h2 {
+    margin-top: 0;
+  }
+
+  #area-stampa-contenuto table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  #area-stampa-contenuto th,
+  #area-stampa-contenuto td {
+    border: 1px solid #999;
+    padding: 6px 8px;
+    text-align: left;
+  }
+}

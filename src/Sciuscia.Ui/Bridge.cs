@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Sciuscia.Foundations;
+using Sciuscia.Operations;
 using Sciuscia.Orders;
 using Sciuscia.Registry;
 
@@ -75,6 +77,12 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                 "articoli.cambiaStato" => await CambiaStatoArticoloAsync(request.Payload),
                 "articoli.aggiungiFoto" => await AggiungiFotoAsync(request.Payload),
                 "articoli.eliminaFoto" => await EliminaFotoAsync(request.Payload),
+                "operazioni.registraPagamento" => await RegistraPagamentoAsync(request.Payload),
+                "operazioni.correggiPagamento" => await CorreggiPagamentoAsync(request.Payload),
+                "operazioni.registraRitiro" => await RegistraRitiroAsync(request.Payload),
+                "operazioni.inviaMessaggio" => await InviaMessaggioAsync(request.Payload),
+                "operazioni.registraStampa" => await RegistraStampaAsync(request.Payload),
+                "sistema.apriLink" => ApriLink(request.Payload),
                 _ => throw new InvalidOperationException($"Comando non riconosciuto: {request.Command}"),
             };
 
@@ -170,7 +178,14 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
             ? "—"
             : $"{customer.Surname} {customer.FirstName}".Trim();
 
-        return new OrderDetailDto(order, customerName, financials, itemDetails);
+        var payments = await runtime.Operations.Payments.ListByOrderAsync(orderId);
+        var pickups = await runtime.Operations.Pickups.ListByOrderAsync(orderId);
+        var messages = await runtime.Operations.Messages.ListByOrderAsync(orderId);
+        var prints = await runtime.Operations.Prints.ListByOrderAsync(orderId);
+
+        return new OrderDetailDto(
+            order, customerName, customer?.MobileOriginal, customer?.Email, financials, itemDetails,
+            payments, pickups, messages, prints);
     }
 
     /// <summary>
@@ -453,6 +468,91 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         return new { ok = true };
     }
 
+    /// <summary>Registra un pagamento (parziale o saldo) su una commessa. Il database non permette importi a zero.</summary>
+    private async Task<PaymentEventRecord> RegistraPagamentoAsync(JsonElement payload)
+    {
+        var orderId = RequireString(payload, "commessaId");
+        var importoCents = RequireInt(payload, "importoCents");
+        var tipo = RequireString(payload, "tipo");
+        return await runtime.Operations.Payments.AddAsync(orderId, importoCents, tipo);
+    }
+
+    /// <summary>
+    /// Corregge un pagamento già registrato con un nuovo evento (tipicamente di segno opposto),
+    /// senza mai modificare o eliminare quello originale: il motivo è obbligatorio.
+    /// </summary>
+    private async Task<PaymentEventRecord> CorreggiPagamentoAsync(JsonElement payload)
+    {
+        var orderId = RequireString(payload, "commessaId");
+        var correggePagamentoId = RequireString(payload, "correggePagamentoId");
+        var importoCents = RequireInt(payload, "importoCents");
+        var motivo = RequireString(payload, "motivo");
+        return await runtime.Operations.Payments.AddCorrectionAsync(orderId, correggePagamentoId, importoCents, motivo);
+    }
+
+    /// <summary>Registra il ritiro di uno o più articoli: il database li porta automaticamente allo stato "Consegnato".</summary>
+    private async Task<PickupRecord> RegistraRitiroAsync(JsonElement payload)
+    {
+        var orderId = RequireString(payload, "commessaId");
+        var articoli = RequireStringArray(payload, "articoliId");
+        var note = OptionalString(payload, "note");
+        return await runtime.Operations.Pickups.CreateAsync(orderId, articoli, notes: note);
+    }
+
+    /// <summary>Registra un messaggio inviato al cliente, con il testo effettivo congelato al momento dell'invio.</summary>
+    private async Task<MessageRecord> InviaMessaggioAsync(JsonElement payload)
+    {
+        var orderId = RequireString(payload, "commessaId");
+        var tipo = RequireString(payload, "tipo");
+        var scopo = RequireString(payload, "scopo");
+        var testo = RequireString(payload, "testo");
+        var destinatario = OptionalString(payload, "destinatario");
+        var articoli = OptionalStringArray(payload, "articoliId");
+        return await runtime.Operations.Messages.SendAsync(orderId, tipo, scopo, testo, articoli, destinatario);
+    }
+
+    /// <summary>
+    /// Registra un evento di stampa (ricevuta, fotografie o etichetta). Per l'etichetta serve
+    /// anche la versione corrente dell'etichetta dell'articolo, così il database sa riconoscere
+    /// quando l'etichetta stampata non corrisponde più ai dati attuali.
+    /// </summary>
+    private async Task<PrintEventRecord> RegistraStampaAsync(JsonElement payload)
+    {
+        var orderId = OptionalString(payload, "commessaId");
+        var articoloId = OptionalString(payload, "articoloId");
+        var tipoDocumento = RequireString(payload, "tipoDocumento");
+        var esito = RequireString(payload, "esito");
+
+        int? labelRevision = null;
+        if (tipoDocumento == "ETICHETTA" && articoloId is not null)
+        {
+            var articolo = await runtime.Orders.Items.FindAsync(articoloId);
+            labelRevision = articolo?.LabelRevision;
+        }
+
+        return await runtime.Operations.Prints.RecordAsync(orderId, articoloId, tipoDocumento, "v1", esito, labelRevision: labelRevision);
+    }
+
+    /// <summary>
+    /// Apre un collegamento con il programma predefinito del PC (il browser per WhatsApp Web,
+    /// il programma di posta per un "mailto:"): serve per preparare un messaggio al cliente senza
+    /// dover copiare/incollare il testo a mano. Ammessi solo link http/https/mailto, mai percorsi
+    /// di file o altri schemi, per sicurezza.
+    /// </summary>
+    private static object ApriLink(JsonElement payload)
+    {
+        var url = RequireString(payload, "url");
+        if (!url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            && !url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            && !url.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Collegamento non consentito.");
+        }
+
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        return new { ok = true };
+    }
+
     private static string EstraiBase64(string valore)
     {
         var virgola = valore.IndexOf(',');
@@ -527,6 +627,39 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         return null;
     }
 
+    private static IReadOnlyList<string> RequireStringArray(JsonElement payload, string propertyName)
+    {
+        var list = ReadStringArray(payload, propertyName);
+        if (list is { Count: > 0 })
+        {
+            return list;
+        }
+
+        throw new ArgumentException($"Campo obbligatorio mancante: {propertyName}.");
+    }
+
+    private static IReadOnlyList<string>? OptionalStringArray(JsonElement payload, string propertyName)
+    {
+        var list = ReadStringArray(payload, propertyName);
+        return list is { Count: > 0 } ? list : null;
+    }
+
+    private static List<string>? ReadStringArray(JsonElement payload, string propertyName)
+    {
+        if (payload.ValueKind == JsonValueKind.Object
+            && payload.TryGetProperty(propertyName, out var property)
+            && property.ValueKind == JsonValueKind.Array)
+        {
+            return property.EnumerateArray()
+                .Select(element => element.GetString())
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value!)
+                .ToList();
+        }
+
+        return null;
+    }
+
     private static bool? OptionalBool(JsonElement payload, string propertyName)
     {
         if (payload.ValueKind == JsonValueKind.Object
@@ -541,7 +674,17 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
 }
 
 /// <summary>Tutto ciò che serve alla schermata di dettaglio di una commessa, già pronto per la pagina.</summary>
-internal sealed record OrderDetailDto(OrderRecord Order, string CustomerName, OrderFinancials Financials, IReadOnlyList<ItemDetailDto> Items);
+internal sealed record OrderDetailDto(
+    OrderRecord Order,
+    string CustomerName,
+    string? CustomerMobile,
+    string? CustomerEmail,
+    OrderFinancials Financials,
+    IReadOnlyList<ItemDetailDto> Items,
+    IReadOnlyList<PaymentEventRecord> Payments,
+    IReadOnlyList<PickupRecord> Pickups,
+    IReadOnlyList<MessageRecord> Messages,
+    IReadOnlyList<PrintEventRecord> Prints);
 
 internal sealed record ItemDetailDto(ItemRecord Item, string CategoryName, string BrandName, IReadOnlyList<ItemWorkDetailDto> Works, IReadOnlyList<PhotoDto> Photos);
 

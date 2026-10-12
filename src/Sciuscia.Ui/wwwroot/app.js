@@ -34,6 +34,35 @@
   const bottoneSceglieFileFoto = document.getElementById("btn-scegli-file-foto");
   const nomeFileFotoScelta = document.getElementById("foto-file-nome");
 
+  const corpoTabellaPagamenti = document.getElementById("corpo-tabella-pagamenti");
+  const pagamentiStatoVuoto = document.getElementById("pagamenti-stato-vuoto");
+  const corpoTabellaRitiri = document.getElementById("corpo-tabella-ritiri");
+  const ritiriStatoVuoto = document.getElementById("ritiri-stato-vuoto");
+  const corpoTabellaMessaggi = document.getElementById("corpo-tabella-messaggi");
+  const messaggiStatoVuoto = document.getElementById("messaggi-stato-vuoto");
+  const corpoTabellaStampe = document.getElementById("corpo-tabella-stampe");
+  const stampeStatoVuoto = document.getElementById("stampe-stato-vuoto");
+
+  const modalePagamento = document.getElementById("modal-pagamento");
+  const modaleCorrezionePagamento = document.getElementById("modal-correzione-pagamento");
+  const modaleRitiro = document.getElementById("modal-ritiro");
+  const modaleMessaggio = document.getElementById("modal-messaggio");
+  const areaStampaContenuto = document.getElementById("area-stampa-contenuto");
+
+  const ETICHETTE_TIPO_PAGAMENTO = {
+    CONTANTI: "Contanti", CARTA: "Carta", BONIFICO: "Bonifico", ALTRO: "Altro", CORREZIONE: "Correzione", RIMBORSO: "Rimborso",
+  };
+  const ETICHETTE_TIPO_MESSAGGIO = {
+    WHATSAPP: "WhatsApp", SMS: "SMS", EMAIL: "Email", TELEFONO: "Telefonata", ALTRO: "Altro",
+  };
+  const ETICHETTE_SCOPO_MESSAGGIO = {
+    AVVISO_PRONTO: "Avviso pronto", PREVENTIVO: "Preventivo", SOLLECITO: "Sollecito ritiro", ALTRO: "Altro",
+  };
+  const ETICHETTE_DOCUMENTO_STAMPA = {
+    COPIA_CLIENTE: "Ricevuta cliente", COPIA_INTERNA: "Copia interna", FOTOGRAFIE: "Fotografie", ETICHETTA: "Etichetta",
+  };
+  const ETICHETTE_ESITO_STAMPA = { RIUSCITA: "Riuscita", ERRORE: "Errore", ANNULLATA: "Annullata" };
+
   const ETICHETTE_STATO = {
     DA_LAVORARE: "Da lavorare",
     PRESSO_ARTIGIANO: "Presso l'artigiano",
@@ -63,6 +92,9 @@
   let fotoCatturataDataUrl = null;
   let fotoDaFileDataUrl = null;
   let fotoDaFileNome = null;
+  let dettaglioCorrente = null;
+  let pagamentoInCorrezioneId = null;
+  let stampaInCorso = null;
 
   function formattaEuro(centesimi) {
     return (centesimi / 100).toLocaleString("it-IT", {
@@ -282,6 +314,7 @@
   }
 
   function renderDettaglioCommessa(dettaglio) {
+    dettaglioCorrente = dettaglio;
     const ordine = dettaglio.order;
     document.getElementById("dettaglio-titolo").textContent = "Commessa " + ordine.visibleCode;
     document.getElementById("dettaglio-cliente").textContent = dettaglio.customerName;
@@ -294,14 +327,420 @@
 
     if (dettaglio.items.length === 0) {
       dettaglioStatoVuoto.hidden = false;
+    } else {
+      dettaglioStatoVuoto.hidden = true;
+      for (const dettaglioArticolo of dettaglio.items) {
+        listaArticoli.appendChild(costruisciSchedaArticolo(dettaglioArticolo));
+      }
+    }
+
+    renderPagamenti(dettaglio);
+    renderRitiri(dettaglio);
+    renderMessaggi(dettaglio);
+    renderStampe(dettaglio);
+  }
+
+  // --- Operazioni: Pagamenti ---
+
+  function renderPagamenti(dettaglio) {
+    corpoTabellaPagamenti.innerHTML = "";
+    if (dettaglio.payments.length === 0) {
+      pagamentiStatoVuoto.hidden = false;
       return;
     }
-    dettaglioStatoVuoto.hidden = true;
+    pagamentiStatoVuoto.hidden = true;
 
-    for (const dettaglioArticolo of dettaglio.items) {
-      listaArticoli.appendChild(costruisciSchedaArticolo(dettaglioArticolo));
+    for (const pagamento of dettaglio.payments) {
+      const classeImporto = pagamento.amountCents < 0 ? "importo-negativo" : "importo-positivo";
+      const riga = document.createElement("tr");
+      riga.innerHTML = `
+        <td>${formattaData(pagamento.occurredAt)}</td>
+        <td>${escapeHtml(ETICHETTE_TIPO_PAGAMENTO[pagamento.paymentType] || pagamento.paymentType)}</td>
+        <td class="${classeImporto}">${formattaEuro(pagamento.amountCents)}</td>
+        <td>${escapeHtml(pagamento.reason || "")}</td>
+        <td><button type="button" class="btn-correggi-pagamento">Correggi</button></td>
+      `;
+      riga.querySelector(".btn-correggi-pagamento").addEventListener("click", () => apriModaleCorrezionePagamento(pagamento));
+      corpoTabellaPagamenti.appendChild(riga);
     }
   }
+
+  function apriModalePagamento() {
+    if (!dettaglioCorrente) {
+      return;
+    }
+    document.getElementById("pagamento-commessa-codice").textContent = "Commessa " + dettaglioCorrente.order.visibleCode;
+    document.getElementById("pagamento-importo").value = "";
+    document.getElementById("pagamento-tipo").value = "CONTANTI";
+    modalePagamento.hidden = false;
+  }
+
+  function chiudiModalePagamento() {
+    modalePagamento.hidden = true;
+  }
+
+  async function salvaPagamento() {
+    const importo = parseFloat(document.getElementById("pagamento-importo").value.replace(",", "."));
+    if (!importo || importo <= 0) {
+      mostraErrore("Indicare un importo maggiore di zero.");
+      return;
+    }
+    const tipo = document.getElementById("pagamento-tipo").value;
+    nascondiErrore();
+    try {
+      await window.sciuscia.call("operazioni.registraPagamento", {
+        commessaId: commessaCorrenteId,
+        importoCents: Math.round(importo * 100),
+        tipo,
+      });
+      chiudiModalePagamento();
+      await ricaricaDettaglioCommessa();
+    } catch (errore) {
+      mostraErrore("Non è stato possibile registrare il pagamento: " + errore.message);
+    }
+  }
+
+  function apriModaleCorrezionePagamento(pagamento) {
+    pagamentoInCorrezioneId = pagamento.paymentEventId;
+    document.getElementById("correzione-pagamento-descrizione").textContent =
+      "Pagamento del " + formattaData(pagamento.occurredAt) + ": " + formattaEuro(pagamento.amountCents) +
+      " (" + (ETICHETTE_TIPO_PAGAMENTO[pagamento.paymentType] || pagamento.paymentType) + ")";
+    document.getElementById("correzione-pagamento-importo").value = "";
+    document.getElementById("correzione-pagamento-motivo").value = "";
+    modaleCorrezionePagamento.hidden = false;
+  }
+
+  function chiudiModaleCorrezionePagamento() {
+    modaleCorrezionePagamento.hidden = true;
+    pagamentoInCorrezioneId = null;
+  }
+
+  async function salvaCorrezionePagamento() {
+    const importo = parseFloat(document.getElementById("correzione-pagamento-importo").value.replace(",", "."));
+    if (!importo) {
+      mostraErrore("Indicare l'importo della correzione (diverso da zero).");
+      return;
+    }
+    const motivo = document.getElementById("correzione-pagamento-motivo").value.trim();
+    if (!motivo) {
+      mostraErrore("Indicare il motivo della correzione.");
+      return;
+    }
+    nascondiErrore();
+    try {
+      await window.sciuscia.call("operazioni.correggiPagamento", {
+        commessaId: commessaCorrenteId,
+        correggePagamentoId: pagamentoInCorrezioneId,
+        importoCents: Math.round(importo * 100),
+        motivo,
+      });
+      chiudiModaleCorrezionePagamento();
+      await ricaricaDettaglioCommessa();
+    } catch (errore) {
+      mostraErrore("Non è stato possibile registrare la correzione: " + errore.message);
+    }
+  }
+
+  // --- Operazioni: Ritiri ---
+
+  function renderRitiri(dettaglio) {
+    corpoTabellaRitiri.innerHTML = "";
+    if (dettaglio.pickups.length === 0) {
+      ritiriStatoVuoto.hidden = false;
+      return;
+    }
+    ritiriStatoVuoto.hidden = true;
+
+    const codiciPerId = {};
+    for (const dettaglioArticolo of dettaglio.items) {
+      codiciPerId[dettaglioArticolo.item.itemId] = dettaglioArticolo.item.visibleCode;
+    }
+
+    for (const ritiro of dettaglio.pickups) {
+      const codici = (ritiro.itemIds || []).map((id) => codiciPerId[id] || id).join(", ");
+      const riga = document.createElement("tr");
+      riga.innerHTML = `
+        <td>${formattaData(ritiro.occurredAt)}</td>
+        <td>${escapeHtml(codici)}</td>
+        <td>${escapeHtml(ritiro.notes || "")}</td>
+      `;
+      corpoTabellaRitiri.appendChild(riga);
+    }
+  }
+
+  function apriModaleRitiro() {
+    if (!dettaglioCorrente) {
+      return;
+    }
+    const lista = document.getElementById("ritiro-lista-articoli");
+    lista.innerHTML = "";
+    const articoliDaRitirare = dettaglioCorrente.items.filter(
+      (d) => d.item.workflowStatus !== "CONSEGNATO" && d.item.workflowStatus !== "ANNULLATO"
+    );
+    document.getElementById("ritiro-nessun-articolo").hidden = articoliDaRitirare.length > 0;
+    for (const dettaglioArticolo of articoliDaRitirare) {
+      const etichetta = document.createElement("label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = dettaglioArticolo.item.itemId;
+      etichetta.appendChild(checkbox);
+      etichetta.appendChild(document.createTextNode(
+        " " + dettaglioArticolo.item.visibleCode + " — " + dettaglioArticolo.item.description
+      ));
+      lista.appendChild(etichetta);
+    }
+    document.getElementById("ritiro-note").value = "";
+    modaleRitiro.hidden = false;
+  }
+
+  function chiudiModaleRitiro() {
+    modaleRitiro.hidden = true;
+  }
+
+  async function salvaRitiro() {
+    const selezionati = Array.from(document.querySelectorAll("#ritiro-lista-articoli input[type=checkbox]:checked")).map((c) => c.value);
+    if (selezionati.length === 0) {
+      mostraErrore("Selezionare almeno un articolo da ritirare.");
+      return;
+    }
+    const note = document.getElementById("ritiro-note").value.trim();
+    nascondiErrore();
+    try {
+      await window.sciuscia.call("operazioni.registraRitiro", {
+        commessaId: commessaCorrenteId,
+        articoliId: selezionati,
+        note: note || null,
+      });
+      chiudiModaleRitiro();
+      await ricaricaDettaglioCommessa();
+    } catch (errore) {
+      mostraErrore("Non è stato possibile registrare il ritiro: " + errore.message);
+    }
+  }
+
+  // --- Operazioni: Messaggi ---
+
+  function renderMessaggi(dettaglio) {
+    corpoTabellaMessaggi.innerHTML = "";
+    if (dettaglio.messages.length === 0) {
+      messaggiStatoVuoto.hidden = false;
+      return;
+    }
+    messaggiStatoVuoto.hidden = true;
+
+    for (const messaggio of dettaglio.messages) {
+      const riga = document.createElement("tr");
+      riga.innerHTML = `
+        <td>${formattaData(messaggio.sentAt)}</td>
+        <td>${escapeHtml(ETICHETTE_TIPO_MESSAGGIO[messaggio.messageType] || messaggio.messageType)}</td>
+        <td>${escapeHtml(ETICHETTE_SCOPO_MESSAGGIO[messaggio.purpose] || messaggio.purpose)}</td>
+        <td>${escapeHtml(messaggio.recipient || "—")}</td>
+        <td>${escapeHtml(messaggio.finalText)}</td>
+      `;
+      corpoTabellaMessaggi.appendChild(riga);
+    }
+  }
+
+  function testoMessaggioPredefinito(scopo, dettaglio) {
+    const codice = dettaglio.order.visibleCode;
+    switch (scopo) {
+      case "AVVISO_PRONTO":
+        return "Gentile cliente, il suo articolo (commessa " + codice + ") è pronto per il ritiro. Grazie!";
+      case "PREVENTIVO":
+        return "Gentile cliente, il preventivo per la commessa " + codice + " è di " +
+          formattaEuro(dettaglio.financials.totalCents) + ". Fateci sapere se possiamo procedere.";
+      case "SOLLECITO":
+        return "Gentile cliente, le ricordiamo che l'articolo della commessa " + codice +
+          " è pronto per il ritiro da qualche giorno.";
+      default:
+        return "";
+    }
+  }
+
+  function aggiornaBottoneApriMessaggioEsterno() {
+    const tipo = document.getElementById("messaggio-tipo").value;
+    const bottone = document.getElementById("btn-apri-messaggio-esterno");
+    bottone.hidden = tipo !== "WHATSAPP" && tipo !== "EMAIL";
+    bottone.textContent = tipo === "WHATSAPP" ? "Apri WhatsApp con il testo pronto" : "Apri la posta con il testo pronto";
+  }
+
+  function aggiornaDestinatarioMessaggio() {
+    const tipo = document.getElementById("messaggio-tipo").value;
+    const campo = document.getElementById("messaggio-destinatario");
+    if (dettaglioCorrente) {
+      if ((tipo === "WHATSAPP" || tipo === "SMS" || tipo === "TELEFONO") && dettaglioCorrente.customerMobile) {
+        campo.value = dettaglioCorrente.customerMobile;
+      } else if (tipo === "EMAIL" && dettaglioCorrente.customerEmail) {
+        campo.value = dettaglioCorrente.customerEmail;
+      }
+    }
+    aggiornaBottoneApriMessaggioEsterno();
+  }
+
+  function apriModaleMessaggio() {
+    if (!dettaglioCorrente) {
+      return;
+    }
+    document.getElementById("messaggio-commessa-codice").textContent = "Commessa " + dettaglioCorrente.order.visibleCode;
+    document.getElementById("messaggio-tipo").value = "WHATSAPP";
+    document.getElementById("messaggio-scopo").value = "AVVISO_PRONTO";
+    document.getElementById("messaggio-testo").value = testoMessaggioPredefinito("AVVISO_PRONTO", dettaglioCorrente);
+    document.getElementById("messaggio-destinatario").value = "";
+    aggiornaDestinatarioMessaggio();
+
+    const lista = document.getElementById("messaggio-lista-articoli");
+    lista.innerHTML = "";
+    for (const dettaglioArticolo of dettaglioCorrente.items) {
+      const etichetta = document.createElement("label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = dettaglioArticolo.item.itemId;
+      etichetta.appendChild(checkbox);
+      etichetta.appendChild(document.createTextNode(
+        " " + dettaglioArticolo.item.visibleCode + " — " + dettaglioArticolo.item.description
+      ));
+      lista.appendChild(etichetta);
+    }
+
+    modaleMessaggio.hidden = false;
+  }
+
+  function chiudiModaleMessaggio() {
+    modaleMessaggio.hidden = true;
+  }
+
+  async function apriMessaggioEsterno() {
+    const tipo = document.getElementById("messaggio-tipo").value;
+    const destinatario = document.getElementById("messaggio-destinatario").value.trim();
+    const testo = document.getElementById("messaggio-testo").value;
+    nascondiErrore();
+    try {
+      let url;
+      if (tipo === "WHATSAPP") {
+        const numero = destinatario.replace(/[^0-9+]/g, "").replace(/^\+/, "");
+        if (!numero) {
+          mostraErrore("Indicare il numero del cliente per aprire WhatsApp.");
+          return;
+        }
+        url = "https://wa.me/" + numero + "?text=" + encodeURIComponent(testo);
+      } else if (tipo === "EMAIL") {
+        if (!destinatario) {
+          mostraErrore("Indicare l'email del cliente per aprire la posta.");
+          return;
+        }
+        url = "mailto:" + encodeURIComponent(destinatario) + "?body=" + encodeURIComponent(testo);
+      } else {
+        return;
+      }
+      await window.sciuscia.call("sistema.apriLink", { url });
+    } catch (errore) {
+      mostraErrore("Non è stato possibile aprire il collegamento: " + errore.message);
+    }
+  }
+
+  async function salvaMessaggio() {
+    const tipo = document.getElementById("messaggio-tipo").value;
+    const scopo = document.getElementById("messaggio-scopo").value;
+    const testo = document.getElementById("messaggio-testo").value.trim();
+    if (!testo) {
+      mostraErrore("Scrivere il testo del messaggio.");
+      return;
+    }
+    const destinatario = document.getElementById("messaggio-destinatario").value.trim();
+    const selezionati = Array.from(document.querySelectorAll("#messaggio-lista-articoli input[type=checkbox]:checked")).map((c) => c.value);
+    nascondiErrore();
+    try {
+      await window.sciuscia.call("operazioni.inviaMessaggio", {
+        commessaId: commessaCorrenteId,
+        tipo,
+        scopo,
+        testo,
+        destinatario: destinatario || null,
+        articoliId: selezionati.length > 0 ? selezionati : null,
+      });
+      chiudiModaleMessaggio();
+      await ricaricaDettaglioCommessa();
+    } catch (errore) {
+      mostraErrore("Non è stato possibile registrare il messaggio: " + errore.message);
+    }
+  }
+
+  // --- Operazioni: Stampe ---
+
+  function renderStampe(dettaglio) {
+    corpoTabellaStampe.innerHTML = "";
+    if (dettaglio.prints.length === 0) {
+      stampeStatoVuoto.hidden = false;
+      return;
+    }
+    stampeStatoVuoto.hidden = true;
+
+    const codiciPerId = {};
+    for (const dettaglioArticolo of dettaglio.items) {
+      codiciPerId[dettaglioArticolo.item.itemId] = dettaglioArticolo.item.visibleCode;
+    }
+
+    for (const stampa of dettaglio.prints) {
+      const riga = document.createElement("tr");
+      riga.innerHTML = `
+        <td>${formattaData(stampa.printedAt)}</td>
+        <td>${escapeHtml(ETICHETTE_DOCUMENTO_STAMPA[stampa.documentType] || stampa.documentType)}</td>
+        <td>${escapeHtml(stampa.itemId ? (codiciPerId[stampa.itemId] || stampa.itemId) : "—")}</td>
+        <td>${escapeHtml(ETICHETTE_ESITO_STAMPA[stampa.outcome] || stampa.outcome)}</td>
+      `;
+      corpoTabellaStampe.appendChild(riga);
+    }
+  }
+
+  function costruisciContenutoRicevuta(dettaglio) {
+    const righe = dettaglio.items.map((d) =>
+      "<tr><td>" + escapeHtml(d.item.visibleCode) + "</td><td>" + escapeHtml(d.item.description) + "</td></tr>"
+    ).join("");
+    return `
+      <p>Cliente: ${escapeHtml(dettaglio.customerName)}</p>
+      <p>Commessa: ${escapeHtml(dettaglio.order.visibleCode)} del ${formattaData(dettaglio.order.receivedAt)}</p>
+      <table><thead><tr><th>Codice</th><th>Descrizione</th></tr></thead><tbody>${righe}</tbody></table>
+      <p>Totale: ${formattaEuro(dettaglio.financials.totalCents)} — Pagato: ${formattaEuro(dettaglio.financials.paidCents)} — Saldo: ${formattaEuro(dettaglio.financials.balanceCents)}</p>
+    `;
+  }
+
+  function costruisciContenutoEtichetta(dettaglioArticolo) {
+    const lavorazioni = dettaglioArticolo.works.map((w) => escapeHtml(w.work.appliedLabelText)).join(", ");
+    return `
+      <p style="font-size:22px"><strong>${escapeHtml(dettaglioArticolo.item.visibleCode)}</strong></p>
+      <p>${escapeHtml(dettaglioArticolo.item.description)}</p>
+      <p>${lavorazioni || "—"}</p>
+    `;
+  }
+
+  /// Prepara il contenuto da stampare nell'area dedicata (invisibile a schermo, visibile solo
+  /// nel documento stampato) e apre la finestra di stampa del PC; la registrazione dell'esito
+  /// avviene dopo, quando il browser avvisa che la stampa è conclusa (evento "afterprint").
+  function stampaDocumento(tipoDocumento, articoloId, titolo, contenutoHtml) {
+    stampaInCorso = { tipoDocumento, articoloId };
+    areaStampaContenuto.innerHTML = "<h2>" + escapeHtml(titolo) + "</h2>" + contenutoHtml;
+    window.print();
+  }
+
+  window.addEventListener("afterprint", async () => {
+    if (!stampaInCorso || !commessaCorrenteId) {
+      return;
+    }
+    const { tipoDocumento, articoloId } = stampaInCorso;
+    stampaInCorso = null;
+    nascondiErrore();
+    try {
+      await window.sciuscia.call("operazioni.registraStampa", {
+        commessaId: commessaCorrenteId,
+        articoloId,
+        tipoDocumento,
+        esito: "RIUSCITA",
+      });
+      await ricaricaDettaglioCommessa();
+    } catch (errore) {
+      mostraErrore("Non è stato possibile registrare la stampa: " + errore.message);
+    }
+  });
 
   function costruisciSchedaArticolo(dettaglioArticolo) {
     const articolo = dettaglioArticolo.item;
@@ -324,6 +763,7 @@
           <select class="select-stato-articolo"></select>
           <button type="button" class="btn-aggiungi-lavorazione">+ Lavorazione</button>
           <button type="button" class="btn-aggiungi-foto">+ Foto</button>
+          <button type="button" class="btn-aggiungi-etichetta">Stampa etichetta</button>
         </div>
       </div>
       <div class="lista-lavorazioni"></div>
@@ -344,6 +784,9 @@
 
     scheda.querySelector(".btn-aggiungi-lavorazione").addEventListener("click", () => apriModaleLavorazione(articolo.itemId, articolo.visibleCode));
     scheda.querySelector(".btn-aggiungi-foto").addEventListener("click", () => apriModaleFoto(articolo.itemId, articolo.visibleCode));
+    scheda.querySelector(".btn-aggiungi-etichetta").addEventListener("click", () =>
+      stampaDocumento("ETICHETTA", articolo.itemId, "Etichetta " + articolo.visibleCode, costruisciContenutoEtichetta(dettaglioArticolo))
+    );
 
     const listaLavorazioni = scheda.querySelector(".lista-lavorazioni");
     if (dettaglioArticolo.works.length === 0) {
@@ -899,6 +1342,40 @@
   inputFileFoto.addEventListener("change", fotoDaFileScelta);
   document.getElementById("btn-annulla-foto").addEventListener("click", chiudiModaleFoto);
   bottoneSalvaFoto.addEventListener("click", salvaFoto);
+
+  document.getElementById("btn-nuovo-pagamento").addEventListener("click", apriModalePagamento);
+  document.getElementById("btn-annulla-pagamento").addEventListener("click", chiudiModalePagamento);
+  document.getElementById("btn-salva-pagamento").addEventListener("click", salvaPagamento);
+  document.getElementById("btn-annulla-correzione-pagamento").addEventListener("click", chiudiModaleCorrezionePagamento);
+  document.getElementById("btn-salva-correzione-pagamento").addEventListener("click", salvaCorrezionePagamento);
+
+  document.getElementById("btn-nuovo-ritiro").addEventListener("click", apriModaleRitiro);
+  document.getElementById("btn-annulla-ritiro").addEventListener("click", chiudiModaleRitiro);
+  document.getElementById("btn-salva-ritiro").addEventListener("click", salvaRitiro);
+
+  document.getElementById("btn-nuovo-messaggio").addEventListener("click", apriModaleMessaggio);
+  document.getElementById("btn-annulla-messaggio").addEventListener("click", chiudiModaleMessaggio);
+  document.getElementById("btn-salva-messaggio").addEventListener("click", salvaMessaggio);
+  document.getElementById("btn-apri-messaggio-esterno").addEventListener("click", apriMessaggioEsterno);
+  document.getElementById("messaggio-tipo").addEventListener("change", aggiornaDestinatarioMessaggio);
+  document.getElementById("messaggio-scopo").addEventListener("change", (evento) => {
+    if (dettaglioCorrente) {
+      document.getElementById("messaggio-testo").value = testoMessaggioPredefinito(evento.target.value, dettaglioCorrente);
+    }
+  });
+
+  document.getElementById("btn-stampa-ricevuta").addEventListener("click", () => {
+    if (!dettaglioCorrente) {
+      return;
+    }
+    stampaDocumento("COPIA_CLIENTE", null, "Ricevuta — Commessa " + dettaglioCorrente.order.visibleCode, costruisciContenutoRicevuta(dettaglioCorrente));
+  });
+  document.getElementById("btn-stampa-interna").addEventListener("click", () => {
+    if (!dettaglioCorrente) {
+      return;
+    }
+    stampaDocumento("COPIA_INTERNA", null, "Copia interna — Commessa " + dettaglioCorrente.order.visibleCode, costruisciContenutoRicevuta(dettaglioCorrente));
+  });
 
   document.getElementById("btn-torna-elenco").addEventListener("click", () => {
     mostraVistaElenco();
