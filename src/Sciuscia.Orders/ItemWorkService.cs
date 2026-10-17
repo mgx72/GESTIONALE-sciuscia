@@ -16,7 +16,9 @@ public sealed record ItemWorkRecord(
     int? CostCents,
     string ExecutionType,
     string ApprovalStatus,
-    int RowVersion);
+    int RowVersion,
+    string? CanceledAt,
+    string? CancellationReason);
 
 /// <summary>
 /// Lavorazioni applicate a un articolo. Nome, testo etichetta e prezzo vengono "congelati" qui
@@ -97,7 +99,7 @@ public sealed class ItemWorkService(AppPaths paths, SemaphoreSlim maintenanceGat
 
             return new ItemWorkRecord(
                 itemWorkId, itemId, sourceWorkTypeId, externalAssignmentId, appliedName.Trim(), appliedLabelText.Trim(),
-                selectedBand, priceStatus, priceCents, costCents, executionType, approvalStatus, 1);
+                selectedBand, priceStatus, priceCents, costCents, executionType, approvalStatus, 1, null, null);
         }
         finally
         {
@@ -132,6 +134,45 @@ public sealed class ItemWorkService(AppPaths paths, SemaphoreSlim maintenanceGat
                 """;
             command.Parameters.AddWithValue("$id", itemWorkId);
             command.Parameters.AddWithValue("$cost", costCents);
+            command.Parameters.AddWithValue("$expected", expectedRowVersion);
+            if (await command.ExecuteNonQueryAsync(cancellationToken) == 0)
+            {
+                throw new ConcurrencyConflictException("Lavorazione");
+            }
+        }
+        finally
+        {
+            maintenanceGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Imposta (o corregge) il prezzo di una lavorazione già applicata alla commessa — serve sia
+    /// per decidere il prezzo di una lavorazione "da definire" dopo un preventivo accettato dal
+    /// cliente, sia per correggere un prezzo già impostato (resta modificabile nel contesto della
+    /// commessa, come previsto dalla specifica).
+    /// </summary>
+    public async Task SetPriceAsync(string itemWorkId, int priceCents, int expectedRowVersion, CancellationToken cancellationToken = default)
+    {
+        if (priceCents < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(priceCents), "Il prezzo non può essere negativo.");
+        }
+
+        await maintenanceGate.WaitAsync(cancellationToken);
+        try
+        {
+            await using var connection = await DatabaseInitializer.OpenReadyConnectionAsync(paths.DatabasePath, cancellationToken: cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                UPDATE item_works
+                   SET price_cents = $price, price_status = 'DEFINITO',
+                       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), row_version = row_version + 1
+                 WHERE item_work_id = $id AND row_version = $expected;
+                """;
+            command.Parameters.AddWithValue("$id", itemWorkId);
+            command.Parameters.AddWithValue("$price", priceCents);
             command.Parameters.AddWithValue("$expected", expectedRowVersion);
             if (await command.ExecuteNonQueryAsync(cancellationToken) == 0)
             {
@@ -185,7 +226,8 @@ public sealed class ItemWorkService(AppPaths paths, SemaphoreSlim maintenanceGat
         command.CommandText =
             """
             SELECT item_work_id, item_id, source_work_type_id, external_assignment_id, applied_name, applied_label_text,
-                   selected_band, price_status, price_cents, cost_cents, execution_type, approval_status, row_version
+                   selected_band, price_status, price_cents, cost_cents, execution_type, approval_status, row_version,
+                   canceled_at, cancellation_reason
             FROM item_works WHERE item_id = $itemId ORDER BY sort_order;
             """;
         command.Parameters.AddWithValue("$itemId", itemId);
@@ -203,7 +245,9 @@ public sealed class ItemWorkService(AppPaths paths, SemaphoreSlim maintenanceGat
                 reader.GetString(7),
                 reader.IsDBNull(8) ? null : reader.GetInt32(8),
                 reader.IsDBNull(9) ? null : reader.GetInt32(9),
-                reader.GetString(10), reader.GetString(11), reader.GetInt32(12)));
+                reader.GetString(10), reader.GetString(11), reader.GetInt32(12),
+                reader.IsDBNull(13) ? null : reader.GetString(13),
+                reader.IsDBNull(14) ? null : reader.GetString(14)));
         }
 
         return results;

@@ -74,6 +74,9 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                 "anagrafiche.disattivaCliente" => await ImpostaAttivoClienteAsync(request.Payload, false),
                 "articoli.crea" => await CreaArticoloAsync(request.Payload),
                 "articoli.aggiungiLavorazione" => await AggiungiLavorazioneAsync(request.Payload),
+                "articoli.impostaPrezzoLavorazione" => await ImpostaPrezzoLavorazioneAsync(request.Payload),
+                "articoli.impostaCostoLavorazione" => await ImpostaCostoLavorazioneAsync(request.Payload),
+                "articoli.annullaLavorazione" => await AnnullaLavorazioneAsync(request.Payload),
                 "articoli.cambiaStato" => await CambiaStatoArticoloAsync(request.Payload),
                 "articoli.aggiungiFoto" => await AggiungiFotoAsync(request.Payload),
                 "articoli.eliminaFoto" => await EliminaFotoAsync(request.Payload),
@@ -421,6 +424,36 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
 
         return await runtime.Orders.ItemWorks.AddAsync(
             itemId, workTypeId, nome, testoEtichetta, fascia, prezzoCents, costoCents, esecuzione, assignmentId);
+    }
+
+    /// <summary>Decide (o corregge) il prezzo di una lavorazione già applicata, es. dopo che il cliente accetta un preventivo.</summary>
+    private async Task<object> ImpostaPrezzoLavorazioneAsync(JsonElement payload)
+    {
+        var lavorazioneId = RequireString(payload, "lavorazioneId");
+        var prezzoCents = RequireInt(payload, "prezzoCents");
+        var rowVersion = RequireInt(payload, "rowVersion");
+        await runtime.Orders.ItemWorks.SetPriceAsync(lavorazioneId, prezzoCents, rowVersion);
+        return new { ok = true };
+    }
+
+    /// <summary>Corregge il costo dell'artigiano di una lavorazione esterna già applicata alla commessa.</summary>
+    private async Task<object> ImpostaCostoLavorazioneAsync(JsonElement payload)
+    {
+        var lavorazioneId = RequireString(payload, "lavorazioneId");
+        var costoCents = RequireInt(payload, "costoCents");
+        var rowVersion = RequireInt(payload, "rowVersion");
+        await runtime.Orders.ItemWorks.SetCostAsync(lavorazioneId, costoCents, rowVersion);
+        return new { ok = true };
+    }
+
+    /// <summary>Annulla una lavorazione applicata (es. il cliente non vuole più farla fare): resta nello storico, non si elimina.</summary>
+    private async Task<object> AnnullaLavorazioneAsync(JsonElement payload)
+    {
+        var lavorazioneId = RequireString(payload, "lavorazioneId");
+        var motivo = RequireString(payload, "motivo");
+        var rowVersion = RequireInt(payload, "rowVersion");
+        await runtime.Orders.ItemWorks.CancelAsync(lavorazioneId, motivo, rowVersion);
+        return new { ok = true };
     }
 
     private async Task<ItemRecord> CambiaStatoArticoloAsync(JsonElement payload)

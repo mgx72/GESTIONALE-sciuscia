@@ -87,6 +87,7 @@
   let marcaAnagraficaInModifica = null;
   let lavorazioneListinoInModifica = null;
   let lavorazioneListinoPerFasce = null;
+  let lavorazioneInModifica = null;
   let articoloPerFotoId = null;
   let streamWebcamAttivo = null;
   let fotoCatturataDataUrl = null;
@@ -883,7 +884,8 @@
   function costruisciRigaLavorazione(dettaglioLavorazione) {
     const lavorazione = dettaglioLavorazione.work;
     const riga = document.createElement("div");
-    riga.className = "riga-lavorazione";
+    const annullata = lavorazione.canceledAt != null;
+    riga.className = "riga-lavorazione" + (annullata ? " lavorazione-annullata" : "");
 
     const prezzoTesto = lavorazione.priceStatus === "DEFINITO" ? formattaEuro(lavorazione.priceCents) : "Prezzo da definire";
     const esecuzioneTesto = lavorazione.executionType === "ESTERNA"
@@ -894,8 +896,102 @@
       <span class="nome-lavorazione">${escapeHtml(lavorazione.appliedName)}</span>
       <span class="esecuzione-lavorazione">${esecuzioneTesto}</span>
       <span class="prezzo-lavorazione">${prezzoTesto}</span>
+      ${annullata
+        ? `<span class="badge-annullata" title="${escapeHtml(lavorazione.cancellationReason || "")}">Annullata</span>`
+        : '<button type="button" class="btn-modifica-lavorazione">Modifica</button>'}
     `;
+
+    if (!annullata) {
+      riga.querySelector(".btn-modifica-lavorazione").addEventListener("click", () =>
+        apriModaleModificaLavorazione(dettaglioLavorazione)
+      );
+    }
+
     return riga;
+  }
+
+  function apriModaleModificaLavorazione(dettaglioLavorazione) {
+    nascondiErrore();
+    lavorazioneInModifica = dettaglioLavorazione.work;
+    document.getElementById("modifica-lavorazione-nome").textContent = lavorazioneInModifica.appliedName;
+    document.getElementById("modifica-lavorazione-prezzo").value = lavorazioneInModifica.priceStatus === "DEFINITO"
+      ? (lavorazioneInModifica.priceCents / 100).toFixed(2)
+      : "";
+    const campoCosto = document.getElementById("campo-modifica-lavorazione-costo");
+    campoCosto.hidden = lavorazioneInModifica.executionType !== "ESTERNA";
+    document.getElementById("modifica-lavorazione-costo").value = lavorazioneInModifica.costCents != null
+      ? (lavorazioneInModifica.costCents / 100).toFixed(2)
+      : "";
+    document.getElementById("modifica-lavorazione-motivo").value = "";
+    document.getElementById("modal-modifica-lavorazione").hidden = false;
+  }
+
+  function chiudiModaleModificaLavorazione() {
+    document.getElementById("modal-modifica-lavorazione").hidden = true;
+    lavorazioneInModifica = null;
+  }
+
+  async function salvaModificaLavorazione() {
+    if (!lavorazioneInModifica) {
+      return;
+    }
+
+    const prezzoTesto = document.getElementById("modifica-lavorazione-prezzo").value.trim();
+    const costoTesto = document.getElementById("modifica-lavorazione-costo").value.trim();
+    const costoVisibile = !document.getElementById("campo-modifica-lavorazione-costo").hidden;
+
+    nascondiErrore();
+    try {
+      if (prezzoTesto !== "") {
+        const prezzoCents = Math.round(parseFloat(prezzoTesto.replace(",", ".")) * 100);
+        await window.sciuscia.call("articoli.impostaPrezzoLavorazione", {
+          lavorazioneId: lavorazioneInModifica.itemWorkId,
+          prezzoCents,
+          rowVersion: lavorazioneInModifica.rowVersion,
+        });
+      }
+      if (costoVisibile && costoTesto !== "") {
+        const costoCents = Math.round(parseFloat(costoTesto.replace(",", ".")) * 100);
+        await window.sciuscia.call("articoli.impostaCostoLavorazione", {
+          lavorazioneId: lavorazioneInModifica.itemWorkId,
+          costoCents,
+          rowVersion: lavorazioneInModifica.rowVersion,
+        });
+      }
+      chiudiModaleModificaLavorazione();
+      await ricaricaDettaglioCommessa();
+    } catch (errore) {
+      mostraErrore("Non è stato possibile salvare le modifiche: " + errore.message);
+    }
+  }
+
+  async function annullaLavorazioneApplicata() {
+    if (!lavorazioneInModifica) {
+      return;
+    }
+
+    const motivo = document.getElementById("modifica-lavorazione-motivo").value.trim();
+    if (!motivo) {
+      mostraErrore("Indicare il motivo dell'annullamento.");
+      return;
+    }
+
+    if (!window.confirm("Annullare questa lavorazione? Resterà visibile nello storico ma non conterà più nel totale.")) {
+      return;
+    }
+
+    nascondiErrore();
+    try {
+      await window.sciuscia.call("articoli.annullaLavorazione", {
+        lavorazioneId: lavorazioneInModifica.itemWorkId,
+        motivo,
+        rowVersion: lavorazioneInModifica.rowVersion,
+      });
+      chiudiModaleModificaLavorazione();
+      await ricaricaDettaglioCommessa();
+    } catch (errore) {
+      mostraErrore("Non è stato possibile annullare la lavorazione: " + errore.message);
+    }
   }
 
   async function cambiaStatoArticolo(articoloId, rowVersion, nuovoStato) {
@@ -1491,6 +1587,9 @@
 
   document.getElementById("btn-annulla-lavorazione").addEventListener("click", chiudiModaleLavorazione);
   document.getElementById("btn-crea-lavorazione").addEventListener("click", creaLavorazione);
+  document.getElementById("btn-chiudi-modifica-lavorazione").addEventListener("click", chiudiModaleModificaLavorazione);
+  document.getElementById("btn-salva-modifica-lavorazione").addEventListener("click", salvaModificaLavorazione);
+  document.getElementById("btn-annulla-lavorazione-applicata").addEventListener("click", annullaLavorazioneApplicata);
   selectLavorazioneTipo.addEventListener("change", selezionaVoceListino);
   selectLavorazioneFascia.addEventListener("change", aggiornaPrezzoDaFascia);
   checkboxEsterna.addEventListener("change", async () => {

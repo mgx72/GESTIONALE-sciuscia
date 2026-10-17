@@ -250,6 +250,23 @@ tbody tr:last-child td {
   margin-bottom: 0;
 }
 
+button.pericoloso {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+button.pericoloso:hover {
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.separatore-modale {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 18px 0;
+}
+
 .field label {
   display: block;
   margin-bottom: 5px;
@@ -464,6 +481,25 @@ tbody tr:last-child td {
 .riga-lavorazione .prezzo-lavorazione {
   font-weight: 600;
   white-space: nowrap;
+}
+
+.riga-lavorazione.lavorazione-annullata {
+  opacity: 0.6;
+}
+
+.riga-lavorazione.lavorazione-annullata .nome-lavorazione {
+  text-decoration: line-through;
+}
+
+.riga-lavorazione .badge-annullata {
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.riga-lavorazione .btn-modifica-lavorazione {
+  font-size: 12px;
+  padding: 4px 10px;
 }
 
 /* --- Fotografie --- */

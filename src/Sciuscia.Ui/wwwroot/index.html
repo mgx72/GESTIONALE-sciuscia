@@ -298,6 +298,36 @@
     </div>
   </div>
 
+  <div id="modal-modifica-lavorazione" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3>Modifica lavorazione</h3>
+      <p class="subtitle" id="modifica-lavorazione-nome"></p>
+      <div class="field">
+        <label for="modifica-lavorazione-prezzo">Prezzo (euro)</label>
+        <input type="number" step="0.01" min="0" id="modifica-lavorazione-prezzo" placeholder="Lascia vuoto se ancora da definire" />
+      </div>
+      <div class="field" id="campo-modifica-lavorazione-costo" hidden>
+        <label for="modifica-lavorazione-costo">Costo artigiano (euro)</label>
+        <input type="number" step="0.01" min="0" id="modifica-lavorazione-costo" />
+        <p class="hint">Obbligatorio prima di poter segnare l'articolo come Pronto.</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-chiudi-modifica-lavorazione">Chiudi</button>
+        <button type="button" id="btn-salva-modifica-lavorazione" class="primary">Salva modifiche</button>
+      </div>
+      <hr class="separatore-modale" />
+      <p class="subtitle">Il cliente non vuole più far fare questa lavorazione?</p>
+      <div class="field">
+        <label for="modifica-lavorazione-motivo">Motivo dell'annullamento *</label>
+        <input type="text" id="modifica-lavorazione-motivo" placeholder="Es. Il cliente ha rifiutato il preventivo" />
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-annulla-lavorazione-applicata" class="pericoloso">Annulla questa lavorazione</button>
+      </div>
+      <p class="hint">La lavorazione annullata resta visibile nello storico della commessa, ma esclusa dal totale.</p>
+    </div>
+  </div>
+
   <div id="modal-foto" class="modal-overlay" hidden>
     <div class="modal modal-foto">
       <h3>Aggiungi fotografia</h3>
