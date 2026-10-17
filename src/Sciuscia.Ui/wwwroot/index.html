@@ -189,7 +189,7 @@
           </div>
           <div class="panel">
             <table>
-              <thead><tr><th>Nome</th><th>Testo etichetta</th><th>Esecuzione</th><th>Prezzo</th><th>Stato</th><th></th></tr></thead>
+              <thead><tr><th>Nome</th><th>Testo etichetta</th><th>Esecuzione</th><th>Prezzo</th><th>Costo</th><th>Stato</th><th></th></tr></thead>
               <tbody id="corpo-tabella-listino-anagrafica"></tbody>
             </table>
           </div>
@@ -581,8 +581,13 @@
         <label for="listino-prezzo-fisso">Prezzo standard (euro)</label>
         <input type="number" step="0.01" min="0" id="listino-prezzo-fisso" />
       </div>
+      <div class="field" id="campo-listino-costo-fisso" hidden>
+        <label for="listino-costo-fisso">Costo standard (euro)</label>
+        <input type="number" step="0.01" min="0" id="listino-costo-fisso" />
+        <p class="hint">Facoltativo. Per una lavorazione esterna, resta comunque modificabile in ogni singola commessa.</p>
+      </div>
       <div class="field" id="campo-listino-fasce" hidden>
-        <p class="hint">Dopo aver creato la lavorazione, potrai impostare il prezzo di ogni fascia (A, B, C) dalla tabella del listino.</p>
+        <p class="hint">Dopo aver creato la lavorazione, potrai impostare il prezzo (e l'eventuale costo) di ogni fascia (A, B, C) dalla tabella del listino.</p>
       </div>
       <div class="modal-actions">
         <button type="button" id="btn-annulla-listino">Annulla</button>
@@ -595,19 +600,37 @@
     <div class="modal">
       <h3 id="titolo-modal-fasce">Fasce di prezzo</h3>
       <p class="subtitle" id="sottotitolo-modal-fasce"></p>
-      <div class="field">
-        <label for="fascia-listino-a">Fascia A — prezzo (euro)</label>
-        <input type="number" step="0.01" min="0" id="fascia-listino-a" />
+      <div class="field-doppio">
+        <div class="field">
+          <label for="fascia-listino-a">Fascia A — prezzo (euro)</label>
+          <input type="number" step="0.01" min="0" id="fascia-listino-a" />
+        </div>
+        <div class="field">
+          <label for="fascia-listino-a-costo">Fascia A — costo (euro)</label>
+          <input type="number" step="0.01" min="0" id="fascia-listino-a-costo" />
+        </div>
       </div>
-      <div class="field">
-        <label for="fascia-listino-b">Fascia B — prezzo (euro)</label>
-        <input type="number" step="0.01" min="0" id="fascia-listino-b" />
+      <div class="field-doppio">
+        <div class="field">
+          <label for="fascia-listino-b">Fascia B — prezzo (euro)</label>
+          <input type="number" step="0.01" min="0" id="fascia-listino-b" />
+        </div>
+        <div class="field">
+          <label for="fascia-listino-b-costo">Fascia B — costo (euro)</label>
+          <input type="number" step="0.01" min="0" id="fascia-listino-b-costo" />
+        </div>
       </div>
-      <div class="field">
-        <label for="fascia-listino-c">Fascia C — prezzo (euro)</label>
-        <input type="number" step="0.01" min="0" id="fascia-listino-c" />
+      <div class="field-doppio">
+        <div class="field">
+          <label for="fascia-listino-c">Fascia C — prezzo (euro)</label>
+          <input type="number" step="0.01" min="0" id="fascia-listino-c" />
+        </div>
+        <div class="field">
+          <label for="fascia-listino-c-costo">Fascia C — costo (euro)</label>
+          <input type="number" step="0.01" min="0" id="fascia-listino-c-costo" />
+        </div>
       </div>
-      <p class="hint">Lascia vuoto un campo se quella fascia non serve per questa lavorazione.</p>
+      <p class="hint">Lascia vuoto un campo se quella fascia (o il suo costo) non serve per questa lavorazione. Il costo è facoltativo.</p>
       <div class="modal-actions">
         <button type="button" id="btn-annulla-fasce-listino">Chiudi</button>
         <button type="button" id="btn-salva-fasce-listino" class="primary">Salva fasce</button>

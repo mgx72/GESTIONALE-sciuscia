@@ -1170,6 +1170,29 @@
 
     const prezzoCents = prezzoTesto === "" ? null : Math.round(parseFloat(prezzoTesto.replace(",", ".")) * 100);
 
+    // Se la lavorazione viene da una voce del Listino a prezzo fisso, ma nome/etichetta/prezzo
+    // sono stati cambiati prima di confermare, chiediamo se la modifica deve valere solo per
+    // questa commessa (comportamento di sempre) oppure anche per il Listino generale.
+    let voceListinoDaAggiornare = null;
+    if (workTypeId && listinoCache) {
+      const voceOriginale = listinoCache.find((v) => v.workTypeId === workTypeId);
+      if (voceOriginale && voceOriginale.priceMode === "FISSO") {
+        const nomeCambiato = nome !== voceOriginale.name;
+        const etichettaCambiata = testoEtichetta !== voceOriginale.labelText;
+        const prezzoCambiato = prezzoCents !== voceOriginale.standardPriceCents;
+        if (nomeCambiato || etichettaCambiata || prezzoCambiato) {
+          const aggiornareListino = window.confirm(
+            "Hai modificato nome, testo etichetta o prezzo rispetto alla voce del Listino.\n\n" +
+            "Vuoi salvare questa modifica anche nel Listino generale, per ritrovarla pronta nelle prossime commesse?\n\n" +
+            "Premi Annulla se deve valere solo per questa commessa."
+          );
+          if (aggiornareListino) {
+            voceListinoDaAggiornare = voceOriginale;
+          }
+        }
+      }
+    }
+
     nascondiErrore();
     try {
       await window.sciuscia.call("articoli.aggiungiLavorazione", {
@@ -1182,6 +1205,25 @@
         esecuzione: esterna ? "ESTERNA" : "INTERNA",
         artigianoId,
       });
+
+      if (voceListinoDaAggiornare) {
+        try {
+          await window.sciuscia.call("anagrafiche.modificaLavorazioneListino", {
+            lavorazioneId: voceListinoDaAggiornare.workTypeId,
+            nome,
+            testoEtichetta,
+            esecuzione: voceListinoDaAggiornare.executionDefault,
+            modalitaPrezzo: voceListinoDaAggiornare.priceMode,
+            prezzoStandardCents: prezzoCents,
+            costoStandardCents: voceListinoDaAggiornare.standardCostCents,
+            rowVersion: voceListinoDaAggiornare.rowVersion,
+          });
+          listinoCache = null;
+        } catch (erroreListino) {
+          mostraErrore("La lavorazione è stata applicata alla commessa, ma non è stato possibile aggiornare il Listino: " + erroreListino.message);
+        }
+      }
+
       chiudiModaleLavorazione();
       await ricaricaDettaglioCommessa();
     } catch (errore) {
@@ -1883,11 +1925,18 @@
       if (voce.priceMode === "FISSO" && voce.standardPriceCents != null) {
         prezzoTesto = formattaEuro(voce.standardPriceCents);
       }
+      let costoTesto = "—";
+      if (voce.priceMode === "FISSO" && voce.standardCostCents != null) {
+        costoTesto = formattaEuro(voce.standardCostCents);
+      } else if (voce.priceMode === "FASCE") {
+        costoTesto = "Vedi fasce";
+      }
       riga.innerHTML = `
         <td>${escapeHtml(voce.name)}</td>
         <td>${escapeHtml(voce.labelText)}</td>
         <td>${voce.executionDefault === "ESTERNA" ? "Esterna" : "Interna"}</td>
         <td>${escapeHtml(prezzoTesto)}</td>
+        <td>${escapeHtml(costoTesto)}</td>
         <td class="${statoClasse}">${voce.active ? "Attiva" : "Disattivata"}</td>
         <td class="azioni-riga">
           <button type="button" class="btn-modifica">Modifica</button>
@@ -1916,6 +1965,9 @@
     document.getElementById("listino-prezzo-fisso").value = voce && voce.standardPriceCents != null
       ? (voce.standardPriceCents / 100).toFixed(2)
       : "";
+    document.getElementById("listino-costo-fisso").value = voce && voce.standardCostCents != null
+      ? (voce.standardCostCents / 100).toFixed(2)
+      : "";
     aggiornaCampiModalitaPrezzoListino();
     document.getElementById("btn-salva-listino").textContent = voce ? "Salva" : "Crea lavorazione";
     document.getElementById("modal-lavorazione-listino").hidden = false;
@@ -1928,6 +1980,7 @@
   function aggiornaCampiModalitaPrezzoListino() {
     const modalita = document.getElementById("listino-modalita-prezzo").value;
     document.getElementById("campo-listino-prezzo-fisso").hidden = modalita !== "FISSO";
+    document.getElementById("campo-listino-costo-fisso").hidden = modalita !== "FISSO";
     document.getElementById("campo-listino-fasce").hidden = modalita !== "FASCE";
   }
 
@@ -1937,6 +1990,7 @@
     const esecuzione = document.getElementById("listino-esecuzione").value;
     const modalitaPrezzo = document.getElementById("listino-modalita-prezzo").value;
     const prezzoTesto = document.getElementById("listino-prezzo-fisso").value.trim();
+    const costoTesto = document.getElementById("listino-costo-fisso").value.trim();
 
     if (!nome || !testoEtichetta) {
       mostraErrore("Nome e testo etichetta sono obbligatori.");
@@ -1946,6 +2000,9 @@
     const prezzoStandardCents = modalitaPrezzo === "FISSO" && prezzoTesto !== ""
       ? Math.round(parseFloat(prezzoTesto.replace(",", ".")) * 100)
       : null;
+    const costoStandardCents = modalitaPrezzo === "FISSO" && costoTesto !== ""
+      ? Math.round(parseFloat(costoTesto.replace(",", ".")) * 100)
+      : null;
 
     nascondiErrore();
     try {
@@ -1953,12 +2010,12 @@
         await window.sciuscia.call("anagrafiche.modificaLavorazioneListino", {
           lavorazioneId: lavorazioneListinoInModifica.workTypeId,
           nome, testoEtichetta, esecuzione, modalitaPrezzo, prezzoStandardCents,
-          costoStandardCents: lavorazioneListinoInModifica.standardCostCents,
+          costoStandardCents,
           rowVersion: lavorazioneListinoInModifica.rowVersion,
         });
       } else {
         await window.sciuscia.call("anagrafiche.creaLavorazioneListino", {
-          nome, testoEtichetta, esecuzione, modalitaPrezzo, prezzoStandardCents,
+          nome, testoEtichetta, esecuzione, modalitaPrezzo, prezzoStandardCents, costoStandardCents,
         });
       }
       listinoCache = null;
@@ -1989,6 +2046,9 @@
     document.getElementById("fascia-listino-a").value = "";
     document.getElementById("fascia-listino-b").value = "";
     document.getElementById("fascia-listino-c").value = "";
+    document.getElementById("fascia-listino-a-costo").value = "";
+    document.getElementById("fascia-listino-b-costo").value = "";
+    document.getElementById("fascia-listino-c-costo").value = "";
 
     try {
       const fasce = await window.sciuscia.call("anagrafiche.fasceLavorazione", { workTypeId: voce.workTypeId });
@@ -1996,6 +2056,10 @@
         const campo = document.getElementById("fascia-listino-" + fascia.bandCode.toLowerCase());
         if (campo) {
           campo.value = (fascia.priceCents / 100).toFixed(2);
+        }
+        const campoCosto = document.getElementById("fascia-listino-" + fascia.bandCode.toLowerCase() + "-costo");
+        if (campoCosto && fascia.costCents != null) {
+          campoCosto.value = (fascia.costCents / 100).toFixed(2);
         }
       }
       document.getElementById("modal-fasce-listino").hidden = false;
@@ -2014,9 +2078,21 @@
     }
 
     const fasce = [
-      { codice: "A", valore: document.getElementById("fascia-listino-a").value.trim() },
-      { codice: "B", valore: document.getElementById("fascia-listino-b").value.trim() },
-      { codice: "C", valore: document.getElementById("fascia-listino-c").value.trim() },
+      {
+        codice: "A",
+        valore: document.getElementById("fascia-listino-a").value.trim(),
+        valoreCosto: document.getElementById("fascia-listino-a-costo").value.trim(),
+      },
+      {
+        codice: "B",
+        valore: document.getElementById("fascia-listino-b").value.trim(),
+        valoreCosto: document.getElementById("fascia-listino-b-costo").value.trim(),
+      },
+      {
+        codice: "C",
+        valore: document.getElementById("fascia-listino-c").value.trim(),
+        valoreCosto: document.getElementById("fascia-listino-c-costo").value.trim(),
+      },
     ].filter((f) => f.valore !== "");
 
     if (fasce.length === 0) {
@@ -2028,10 +2104,14 @@
     try {
       for (const fascia of fasce) {
         const prezzoCents = Math.round(parseFloat(fascia.valore.replace(",", ".")) * 100);
+        const costoCents = fascia.valoreCosto !== ""
+          ? Math.round(parseFloat(fascia.valoreCosto.replace(",", ".")) * 100)
+          : null;
         await window.sciuscia.call("anagrafiche.impostaFasciaLavorazione", {
           lavorazioneId: lavorazioneListinoPerFasce.workTypeId,
           fascia: fascia.codice,
           prezzoCents,
+          costoCents,
         });
       }
       chiudiModaleFasceListino();

@@ -239,6 +239,17 @@ tbody tr:last-child td {
   margin-bottom: 14px;
 }
 
+.field-doppio {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.field-doppio .field {
+  flex: 1;
+  margin-bottom: 0;
+}
+
 .field label {
   display: block;
   margin-bottom: 5px;
