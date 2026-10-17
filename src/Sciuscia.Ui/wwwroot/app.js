@@ -724,7 +724,12 @@
   }
 
   function costruisciContenutoEtichetta(dettaglioArticolo) {
-    const lavorazioni = dettaglioArticolo.works.map((w) => escapeHtml(w.work.appliedLabelText)).join(", ");
+    // Le lavorazioni annullate non devono comparire nei documenti stampati (etichetta, ricevuta):
+    // una volta annullata, una lavorazione va trattata come se non esistesse per chi legge il documento.
+    const lavorazioni = dettaglioArticolo.works
+      .filter((w) => w.work.canceledAt == null)
+      .map((w) => escapeHtml(w.work.appliedLabelText))
+      .join(", ");
     return `
       <p style="font-size:22px"><strong>${escapeHtml(dettaglioArticolo.item.visibleCode)}</strong></p>
       <p>${escapeHtml(dettaglioArticolo.item.description)}</p>
