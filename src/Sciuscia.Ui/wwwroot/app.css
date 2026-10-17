@@ -641,6 +641,12 @@ button.pericoloso:hover {
   gap: 12px;
 }
 
+.azioni-header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 .tab-pane .main-header input[type="text"] {
   flex: 1 1 auto;
   padding: 9px 11px;

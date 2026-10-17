@@ -2019,6 +2019,56 @@
     }
   }
 
+  // --- Importazione Listino/Marche/Categorie da Excel ---
+
+  function fileExcelScelto(evento) {
+    const file = evento.target.files && evento.target.files[0];
+    evento.target.value = "";
+    if (!file) {
+      return;
+    }
+    const lettore = new FileReader();
+    lettore.onload = async () => {
+      nascondiErrore();
+      try {
+        const risultato = await window.sciuscia.call("anagrafiche.importaListino", { fileBase64: lettore.result });
+        mostraRisultatoImportazioneListino(risultato);
+        listinoCache = null;
+        await caricaListinoAnagrafica();
+        await caricaMarcheAnagrafica();
+        await caricaCategorieAnagrafica();
+      } catch (errore) {
+        mostraErrore("Importazione non riuscita: " + errore.message);
+      }
+    };
+    lettore.onerror = () => mostraErrore("Non è stato possibile leggere il file scelto.");
+    lettore.readAsDataURL(file);
+  }
+
+  function mostraRisultatoImportazioneListino(risultato) {
+    const riepilogo =
+      `Marche: ${risultato.marcheNuove} nuove, ${risultato.marcheEsistenti} già presenti. ` +
+      `Categorie: ${risultato.categorieNuove} nuove, ${risultato.categorieEsistenti} già presenti. ` +
+      `Lavorazioni nel Listino: ${risultato.lavorazioniNuove} nuove, ${risultato.lavorazioniAggiornate} aggiornate.`;
+    document.getElementById("importa-listino-riepilogo").textContent = riepilogo;
+
+    const contenitoreAvvisi = document.getElementById("importa-listino-avvisi-contenitore");
+    const listaAvvisi = document.getElementById("importa-listino-avvisi");
+    listaAvvisi.innerHTML = "";
+    if (risultato.avvisi && risultato.avvisi.length > 0) {
+      for (const avviso of risultato.avvisi) {
+        const voce = document.createElement("li");
+        voce.textContent = avviso;
+        listaAvvisi.appendChild(voce);
+      }
+      contenitoreAvvisi.hidden = false;
+    } else {
+      contenitoreAvvisi.hidden = true;
+    }
+
+    document.getElementById("modal-importa-listino").hidden = false;
+  }
+
   function renderListinoAnagrafica(listino) {
     const corpo = document.getElementById("corpo-tabella-listino-anagrafica");
     corpo.innerHTML = "";
@@ -2243,6 +2293,13 @@
   document.getElementById("btn-salva-artigiano-anagrafica").addEventListener("click", salvaArtigianoAnagrafica);
 
   document.getElementById("btn-nuova-lavorazione-listino").addEventListener("click", () => apriModaleListino());
+  document.getElementById("btn-importa-listino").addEventListener("click", () =>
+    document.getElementById("input-file-importa-listino").click()
+  );
+  document.getElementById("input-file-importa-listino").addEventListener("change", fileExcelScelto);
+  document.getElementById("btn-chiudi-importa-listino").addEventListener("click", () => {
+    document.getElementById("modal-importa-listino").hidden = true;
+  });
   document.getElementById("btn-annulla-listino").addEventListener("click", chiudiModaleListino);
   document.getElementById("btn-salva-listino").addEventListener("click", salvaLavorazioneListino);
   document.getElementById("listino-modalita-prezzo").addEventListener("change", aggiornaCampiModalitaPrezzoListino);

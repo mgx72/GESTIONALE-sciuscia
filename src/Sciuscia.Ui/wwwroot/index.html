@@ -185,7 +185,11 @@
         <div class="tab-pane" id="tab-listino" hidden>
           <div class="main-header">
             <p class="subtitle-inline">Le lavorazioni disponibili da scegliere quando si aggiunge una lavorazione a un articolo.</p>
-            <button type="button" id="btn-nuova-lavorazione-listino" class="primary">+ Nuova lavorazione</button>
+            <div class="azioni-header">
+              <button type="button" id="btn-importa-listino">Importa/Aggiorna da Excel…</button>
+              <button type="button" id="btn-nuova-lavorazione-listino" class="primary">+ Nuova lavorazione</button>
+            </div>
+            <input type="file" id="input-file-importa-listino" accept=".xlsx" hidden />
           </div>
           <div class="panel">
             <table>
@@ -664,6 +668,20 @@
       <div class="modal-actions">
         <button type="button" id="btn-annulla-fasce-listino">Chiudi</button>
         <button type="button" id="btn-salva-fasce-listino" class="primary">Salva fasce</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-importa-listino" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3>Importazione completata</h3>
+      <p id="importa-listino-riepilogo"></p>
+      <div id="importa-listino-avvisi-contenitore" hidden>
+        <p class="hint"><strong>Da controllare:</strong></p>
+        <ul id="importa-listino-avvisi"></ul>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-chiudi-importa-listino" class="primary">Chiudi</button>
       </div>
     </div>
   </div>

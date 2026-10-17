@@ -17,6 +17,7 @@ public sealed class RegistryRuntime
         Brands = new BrandService(paths, maintenanceGate);
         Artisans = new ArtisanService(paths, maintenanceGate);
         WorkTypes = new WorkTypeService(paths, maintenanceGate);
+        ListinoImport = new ListinoImportService(paths, maintenanceGate);
     }
 
     public CustomerService Customers { get; }
@@ -24,4 +25,5 @@ public sealed class RegistryRuntime
     public BrandService Brands { get; }
     public ArtisanService Artisans { get; }
     public WorkTypeService WorkTypes { get; }
+    public ListinoImportService ListinoImport { get; }
 }

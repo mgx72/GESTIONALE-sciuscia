@@ -62,6 +62,7 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                 "anagrafiche.attivaLavorazione" => await ImpostaAttivaLavorazioneAsync(request.Payload, true),
                 "anagrafiche.disattivaLavorazione" => await ImpostaAttivaLavorazioneAsync(request.Payload, false),
                 "anagrafiche.impostaFasciaLavorazione" => await ImpostaFasciaLavorazioneAsync(request.Payload),
+                "anagrafiche.importaListino" => await ImportaListinoAsync(request.Payload),
                 "anagrafiche.artigiani" => await runtime.Registry.Artisans.ListAsync(OptionalBool(request.Payload, "includiInattive") ?? false),
                 "anagrafiche.creaArtigiano" => await CreaArtigianoAsync(request.Payload),
                 "anagrafiche.modificaArtigiano" => await ModificaArtigianoAsync(request.Payload),
@@ -491,6 +492,39 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
 
         var photo = await runtime.Orders.Photos.AddAsync(itemId, bytes, estensione, sorgente, nomeFile);
         return await ToPhotoDtoAsync(photo);
+    }
+
+    /// <summary>
+    /// Importa in blocco marche, categorie e lavorazioni/prezzi/costi del Listino da un file Excel
+    /// preparato secondo il modello. Usato sia per il primo caricamento sia per gli aggiornamenti
+    /// successivi (l'utente modifica il file e lo importa di nuovo).
+    /// </summary>
+    private async Task<ListinoImportResult> ImportaListinoAsync(JsonElement payload)
+    {
+        var fileBase64 = RequireString(payload, "fileBase64");
+
+        byte[] bytes;
+        try
+        {
+            bytes = Convert.FromBase64String(EstraiBase64(fileBase64));
+        }
+        catch (FormatException exception)
+        {
+            throw new ArgumentException("File non valido: non è stato possibile leggerlo.", exception);
+        }
+
+        try
+        {
+            return await runtime.Registry.ListinoImport.ImportAsync(bytes);
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new ArgumentException("Il file non sembra un Excel (.xlsx) valido, oppure non segue il modello previsto.", exception);
+        }
     }
 
     private async Task<object> EliminaFotoAsync(JsonElement payload)
