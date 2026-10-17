@@ -671,6 +671,11 @@ button.pericoloso:hover {
   color: var(--text-muted);
 }
 
+.stato-parziale {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .azioni-riga {
   display: flex;
   gap: 6px;

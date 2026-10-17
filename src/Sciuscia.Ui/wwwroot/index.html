@@ -11,7 +11,7 @@
       <h1>Sciuscià</h1>
       <a class="nav-item active" data-view="commesse" id="nav-commesse">Commesse</a>
       <a class="nav-item" data-view="anagrafiche" id="nav-anagrafiche">Anagrafiche</a>
-      <a class="nav-item disabled" title="Non ancora disponibile">Impostazioni</a>
+      <a class="nav-item" data-view="impostazioni" id="nav-impostazioni">Impostazioni</a>
     </nav>
 
     <main class="main">
@@ -199,7 +199,93 @@
           </div>
         </div>
       </div>
+
+      <div id="view-impostazioni" hidden>
+        <div class="main-header">
+          <h2>Impostazioni</h2>
+        </div>
+
+        <div class="tabs-anagrafiche">
+          <button type="button" class="tab-btn active" data-tab-impostazioni="calendario">Calendario aperture</button>
+        </div>
+
+        <div class="tab-pane" id="tab-impostazioni-calendario">
+          <p class="subtitle-inline">
+            Il negozio è chiuso di domenica e lunedì, nelle festività italiane e il 13 giugno (festa di Sant'Antonio) — questi giorni sono calcolati automaticamente. Qui puoi aggiungere chiusure straordinarie (anche a mezza giornata) oppure riaprire eccezionalmente un giorno normalmente chiuso.
+          </p>
+          <div class="main-header">
+            <div class="field-doppio" style="flex:0 0 auto; gap:10px;">
+              <div class="field">
+                <label for="calendario-da-data">Dal</label>
+                <input type="date" id="calendario-da-data" />
+              </div>
+              <div class="field">
+                <label for="calendario-a-data">Al</label>
+                <input type="date" id="calendario-a-data" />
+              </div>
+            </div>
+            <div class="azioni-header">
+              <button type="button" id="btn-mostra-calendario">Mostra</button>
+              <button type="button" id="btn-nuova-chiusura-calendario">+ Chiusura</button>
+              <button type="button" id="btn-nuova-apertura-calendario">+ Apertura straordinaria</button>
+            </div>
+          </div>
+          <div class="panel">
+            <table>
+              <thead><tr><th>Data</th><th>Giorno</th><th>Esito</th><th>Motivo</th><th></th></tr></thead>
+              <tbody id="corpo-tabella-calendario"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </main>
+  </div>
+
+  <div id="modal-chiusura-calendario" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3>Nuova chiusura</h3>
+      <p class="subtitle">Giornata intera, oppure a mezza giornata se dura un solo giorno.</p>
+      <div class="field-doppio">
+        <div class="field">
+          <label for="chiusura-da-data">Dal</label>
+          <input type="date" id="chiusura-da-data" />
+        </div>
+        <div class="field">
+          <label for="chiusura-a-data">Al</label>
+          <input type="date" id="chiusura-a-data" />
+        </div>
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="chiusura-mezza-giornata" /> Mezza giornata (solo se dal e al coincidono)</label>
+      </div>
+      <div class="field">
+        <label for="chiusura-descrizione">Motivo *</label>
+        <input type="text" id="chiusura-descrizione" placeholder="Es. Ferie, Malattia, Lutto..." />
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-annulla-chiusura-calendario">Annulla</button>
+        <button type="button" id="btn-salva-chiusura-calendario" class="primary">Salva chiusura</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-apertura-calendario" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3>Nuova apertura straordinaria</h3>
+      <p class="subtitle">Rende lavorativa per l'intera giornata una festività o una normale giornata di chiusura.</p>
+      <div class="field">
+        <label for="apertura-data">Data</label>
+        <input type="date" id="apertura-data" />
+      </div>
+      <div class="field">
+        <label for="apertura-descrizione">Motivo *</label>
+        <input type="text" id="apertura-descrizione" placeholder="Es. Apertura straordinaria per Natale" />
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-annulla-apertura-calendario">Annulla</button>
+        <button type="button" id="btn-salva-apertura-calendario" class="primary">Salva apertura</button>
+      </div>
+    </div>
   </div>
 
   <div id="modal-nuovo-articolo" class="modal-overlay" hidden>

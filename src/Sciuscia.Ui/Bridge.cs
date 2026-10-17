@@ -63,6 +63,10 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                 "anagrafiche.disattivaLavorazione" => await ImpostaAttivaLavorazioneAsync(request.Payload, false),
                 "anagrafiche.impostaFasciaLavorazione" => await ImpostaFasciaLavorazioneAsync(request.Payload),
                 "anagrafiche.importaListino" => await ImportaListinoAsync(request.Payload),
+                "impostazioni.calendario" => await CalendarioAsync(request.Payload),
+                "impostazioni.creaChiusuraCalendario" => await CreaChiusuraCalendarioAsync(request.Payload),
+                "impostazioni.creaAperturaCalendario" => await CreaAperturaCalendarioAsync(request.Payload),
+                "impostazioni.eliminaEccezioneCalendario" => await EliminaEccezioneCalendarioAsync(request.Payload),
                 "anagrafiche.artigiani" => await runtime.Registry.Artisans.ListAsync(OptionalBool(request.Payload, "includiInattive") ?? false),
                 "anagrafiche.creaArtigiano" => await CreaArtigianoAsync(request.Payload),
                 "anagrafiche.modificaArtigiano" => await ModificaArtigianoAsync(request.Payload),
@@ -527,6 +531,40 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         }
     }
 
+    /// <summary>
+    /// Il calendario di lavoro (Impostazioni → Calendario aperture): un esito per ogni giorno
+    /// dell'intervallo richiesto (lavorativo, chiuso o a mezza giornata, e perché).
+    /// </summary>
+    private async Task<IReadOnlyList<WorkDayInfo>> CalendarioAsync(JsonElement payload)
+    {
+        var daData = RequireDate(payload, "daData");
+        var aData = RequireDate(payload, "aData");
+        return await runtime.Calendar.GetCalendarAsync(daData, aData);
+    }
+
+    private async Task<CalendarExceptionRecord> CreaChiusuraCalendarioAsync(JsonElement payload)
+    {
+        var daData = RequireDate(payload, "daData");
+        var aData = RequireDate(payload, "aData");
+        var mezzaGiornata = OptionalBool(payload, "mezzaGiornata") ?? false;
+        var descrizione = RequireString(payload, "descrizione");
+        return await runtime.Calendar.AddClosureAsync(daData, aData, mezzaGiornata, descrizione);
+    }
+
+    private async Task<CalendarExceptionRecord> CreaAperturaCalendarioAsync(JsonElement payload)
+    {
+        var data = RequireDate(payload, "data");
+        var descrizione = RequireString(payload, "descrizione");
+        return await runtime.Calendar.AddExtraordinaryOpeningAsync(data, descrizione);
+    }
+
+    private async Task<object> EliminaEccezioneCalendarioAsync(JsonElement payload)
+    {
+        var eccezioneId = RequireString(payload, "eccezioneId");
+        await runtime.Calendar.DeleteExceptionAsync(eccezioneId);
+        return new { ok = true };
+    }
+
     private async Task<object> EliminaFotoAsync(JsonElement payload)
     {
         var fotoId = RequireString(payload, "fotoId");
@@ -737,6 +775,18 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         }
 
         return null;
+    }
+
+    /// <summary>Legge una data nel formato "AAAA-MM-GG" (lo stesso usato dai campi &lt;input type="date"&gt;).</summary>
+    private static DateOnly RequireDate(JsonElement payload, string propertyName)
+    {
+        var testo = RequireString(payload, propertyName);
+        if (DateOnly.TryParse(testo, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var data))
+        {
+            return data;
+        }
+
+        throw new ArgumentException($"Data non valida: {propertyName}.");
     }
 }
 

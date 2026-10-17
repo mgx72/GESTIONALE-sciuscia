@@ -73,6 +73,7 @@
   };
 
   const vistaAnagrafiche = document.getElementById("view-anagrafiche");
+  const vistaImpostazioni = document.getElementById("view-impostazioni");
   let ricercaClientiAnagraficaInCorso = null;
 
   let clienteSelezionatoId = null;
@@ -1613,7 +1614,9 @@
   function mostraSchermataCommesse() {
     document.getElementById("nav-commesse").classList.add("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
+    document.getElementById("nav-impostazioni").classList.remove("active");
     vistaAnagrafiche.hidden = true;
+    vistaImpostazioni.hidden = true;
     mostraVistaElenco();
     caricaCommesse();
   }
@@ -1621,15 +1624,43 @@
   function mostraSchermataAnagrafiche() {
     document.getElementById("nav-anagrafiche").classList.add("active");
     document.getElementById("nav-commesse").classList.remove("active");
+    document.getElementById("nav-impostazioni").classList.remove("active");
     vistaElenco.hidden = true;
     vistaDettaglio.hidden = true;
+    vistaImpostazioni.hidden = true;
     vistaAnagrafiche.hidden = false;
     nascondiErrore();
     caricaClientiAnagrafica();
   }
 
+  function mostraSchermataImpostazioni() {
+    document.getElementById("nav-impostazioni").classList.add("active");
+    document.getElementById("nav-commesse").classList.remove("active");
+    document.getElementById("nav-anagrafiche").classList.remove("active");
+    vistaElenco.hidden = true;
+    vistaDettaglio.hidden = true;
+    vistaAnagrafiche.hidden = true;
+    vistaImpostazioni.hidden = false;
+    nascondiErrore();
+    if (!document.getElementById("calendario-da-data").value) {
+      const oggi = new Date();
+      const inNovantaGiorni = new Date(oggi.getTime() + 90 * 24 * 60 * 60 * 1000);
+      document.getElementById("calendario-da-data").value = formattaDataPerInput(oggi);
+      document.getElementById("calendario-a-data").value = formattaDataPerInput(inNovantaGiorni);
+    }
+    caricaCalendario();
+  }
+
+  function formattaDataPerInput(data) {
+    const anno = data.getFullYear();
+    const mese = String(data.getMonth() + 1).padStart(2, "0");
+    const giorno = String(data.getDate()).padStart(2, "0");
+    return `${anno}-${mese}-${giorno}`;
+  }
+
   document.getElementById("nav-commesse").addEventListener("click", mostraSchermataCommesse);
   document.getElementById("nav-anagrafiche").addEventListener("click", mostraSchermataAnagrafiche);
+  document.getElementById("nav-impostazioni").addEventListener("click", mostraSchermataImpostazioni);
 
   document.querySelectorAll("#view-anagrafiche .tab-btn").forEach((bottone) => {
     bottone.addEventListener("click", () => {
@@ -1644,6 +1675,18 @@
       else if (bottone.dataset.tab === "marche") caricaMarcheAnagrafica();
       else if (bottone.dataset.tab === "artigiani") caricaArtigianiAnagrafica();
       else if (bottone.dataset.tab === "listino") caricaListinoAnagrafica();
+    });
+  });
+
+  document.querySelectorAll("#view-impostazioni [data-tab-impostazioni]").forEach((bottone) => {
+    bottone.addEventListener("click", () => {
+      document.querySelectorAll("#view-impostazioni [data-tab-impostazioni]").forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll("#view-impostazioni .tab-pane").forEach((p) => { p.hidden = true; });
+      bottone.classList.add("active");
+      const riquadro = document.getElementById("tab-impostazioni-" + bottone.dataset.tabImpostazioni);
+      riquadro.hidden = false;
+
+      if (bottone.dataset.tabImpostazioni === "calendario") caricaCalendario();
     });
   });
 
@@ -2306,6 +2349,163 @@
 
   document.getElementById("btn-annulla-fasce-listino").addEventListener("click", chiudiModaleFasceListino);
   document.getElementById("btn-salva-fasce-listino").addEventListener("click", salvaFasceListino);
+
+  // --- Calendario di lavoro (Impostazioni) ---
+
+  const NOMI_GIORNI_SETTIMANA = ["Domenica", "Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato"];
+
+  function testoEsitoGiorno(capacityFactor) {
+    if (capacityFactor === 1) return "Lavorativo";
+    if (capacityFactor === 0.5) return "Mezza giornata";
+    return "Chiuso";
+  }
+
+  function classeEsitoGiorno(capacityFactor) {
+    if (capacityFactor === 1) return "stato-attivo";
+    if (capacityFactor === 0.5) return "stato-parziale";
+    return "stato-inattivo";
+  }
+
+  async function caricaCalendario() {
+    nascondiErrore();
+    const daData = document.getElementById("calendario-da-data").value;
+    const aData = document.getElementById("calendario-a-data").value;
+    if (!daData || !aData) {
+      return;
+    }
+    if (aData < daData) {
+      mostraErrore("La data finale non può essere prima della data iniziale.");
+      return;
+    }
+    try {
+      const giorni = await window.sciuscia.call("impostazioni.calendario", { daData, aData });
+      renderCalendario(giorni || []);
+    } catch (errore) {
+      mostraErrore("Non è stato possibile caricare il calendario: " + errore.message);
+    }
+  }
+
+  function renderCalendario(giorni) {
+    const corpo = document.getElementById("corpo-tabella-calendario");
+    corpo.innerHTML = "";
+    for (const giorno of giorni) {
+      const data = new Date(giorno.date + "T00:00:00");
+      const riga = document.createElement("tr");
+      riga.innerHTML = `
+        <td>${escapeHtml(formattaDataItaliana(giorno.date))}</td>
+        <td>${escapeHtml(NOMI_GIORNI_SETTIMANA[data.getDay()])}</td>
+        <td class="${classeEsitoGiorno(giorno.capacityFactor)}">${testoEsitoGiorno(giorno.capacityFactor)}</td>
+        <td>${escapeHtml(giorno.reason || "")}</td>
+        <td class="azioni-riga">${giorno.calendarExceptionId ? '<button type="button" class="btn-elimina-eccezione-calendario">Elimina</button>' : ""}</td>
+      `;
+      if (giorno.calendarExceptionId) {
+        riga.querySelector(".btn-elimina-eccezione-calendario").addEventListener("click", () =>
+          eliminaEccezioneCalendario(giorno.calendarExceptionId)
+        );
+      }
+      corpo.appendChild(riga);
+    }
+  }
+
+  function formattaDataItaliana(dataIso) {
+    const [anno, mese, giorno] = dataIso.split("-");
+    return `${giorno}/${mese}/${anno}`;
+  }
+
+  function apriModaleChiusuraCalendario() {
+    document.getElementById("chiusura-da-data").value = document.getElementById("calendario-da-data").value || "";
+    document.getElementById("chiusura-a-data").value = document.getElementById("calendario-da-data").value || "";
+    document.getElementById("chiusura-mezza-giornata").checked = false;
+    document.getElementById("chiusura-descrizione").value = "";
+    document.getElementById("modal-chiusura-calendario").hidden = false;
+  }
+
+  function chiudiModaleChiusuraCalendario() {
+    document.getElementById("modal-chiusura-calendario").hidden = true;
+  }
+
+  async function salvaChiusuraCalendario() {
+    nascondiErrore();
+    const daData = document.getElementById("chiusura-da-data").value;
+    const aData = document.getElementById("chiusura-a-data").value;
+    const mezzaGiornata = document.getElementById("chiusura-mezza-giornata").checked;
+    const descrizione = document.getElementById("chiusura-descrizione").value.trim();
+    if (!daData || !aData) {
+      mostraErrore("Indicare le date di inizio e fine della chiusura.");
+      return;
+    }
+    if (aData < daData) {
+      mostraErrore("La data finale non può essere prima della data iniziale.");
+      return;
+    }
+    if (mezzaGiornata && daData !== aData) {
+      mostraErrore("La mezza giornata è consentita solo per una chiusura di un unico giorno.");
+      return;
+    }
+    if (!descrizione) {
+      mostraErrore("Indicare il motivo della chiusura.");
+      return;
+    }
+    try {
+      await window.sciuscia.call("impostazioni.creaChiusuraCalendario", { daData, aData, mezzaGiornata, descrizione });
+      chiudiModaleChiusuraCalendario();
+      await caricaCalendario();
+    } catch (errore) {
+      mostraErrore("Salvataggio chiusura non riuscito: " + errore.message);
+    }
+  }
+
+  function apriModaleAperturaCalendario() {
+    document.getElementById("apertura-data").value = document.getElementById("calendario-da-data").value || "";
+    document.getElementById("apertura-descrizione").value = "";
+    document.getElementById("modal-apertura-calendario").hidden = false;
+  }
+
+  function chiudiModaleAperturaCalendario() {
+    document.getElementById("modal-apertura-calendario").hidden = true;
+  }
+
+  async function salvaAperturaCalendario() {
+    nascondiErrore();
+    const data = document.getElementById("apertura-data").value;
+    const descrizione = document.getElementById("apertura-descrizione").value.trim();
+    if (!data) {
+      mostraErrore("Indicare la data dell'apertura straordinaria.");
+      return;
+    }
+    if (!descrizione) {
+      mostraErrore("Indicare il motivo dell'apertura straordinaria.");
+      return;
+    }
+    try {
+      await window.sciuscia.call("impostazioni.creaAperturaCalendario", { data, descrizione });
+      chiudiModaleAperturaCalendario();
+      await caricaCalendario();
+    } catch (errore) {
+      mostraErrore("Salvataggio apertura straordinaria non riuscito: " + errore.message);
+    }
+  }
+
+  async function eliminaEccezioneCalendario(eccezioneId) {
+    if (!window.confirm("Eliminare questa eccezione dal calendario? Il giorno tornerà a seguire la regola ordinaria.")) {
+      return;
+    }
+    nascondiErrore();
+    try {
+      await window.sciuscia.call("impostazioni.eliminaEccezioneCalendario", { eccezioneId });
+      await caricaCalendario();
+    } catch (errore) {
+      mostraErrore("Eliminazione non riuscita: " + errore.message);
+    }
+  }
+
+  document.getElementById("btn-mostra-calendario").addEventListener("click", caricaCalendario);
+  document.getElementById("btn-nuova-chiusura-calendario").addEventListener("click", apriModaleChiusuraCalendario);
+  document.getElementById("btn-nuova-apertura-calendario").addEventListener("click", apriModaleAperturaCalendario);
+  document.getElementById("btn-annulla-chiusura-calendario").addEventListener("click", chiudiModaleChiusuraCalendario);
+  document.getElementById("btn-salva-chiusura-calendario").addEventListener("click", salvaChiusuraCalendario);
+  document.getElementById("btn-annulla-apertura-calendario").addEventListener("click", chiudiModaleAperturaCalendario);
+  document.getElementById("btn-salva-apertura-calendario").addEventListener("click", salvaAperturaCalendario);
 
   caricaCommesse();
 })();

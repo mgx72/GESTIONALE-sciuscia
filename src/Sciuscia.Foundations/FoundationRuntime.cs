@@ -17,6 +17,7 @@ public sealed class FoundationRuntime
         Numbering = new NumberingService(Paths, _maintenanceGate);
         Photos = new PhotoStorageService(Paths, _maintenanceGate);
         Backups = new BackupService(Paths, _maintenanceGate);
+        Calendar = new WorkCalendarService(Paths, _maintenanceGate);
         // Stesso AppPaths e stesso semaforo delle Fondazioni: le scritture di Anagrafiche e
         // Commesse restano serializzate insieme a quelle di Fondazioni in un solo processo.
         Registry = new RegistryRuntime(Paths, _maintenanceGate);
@@ -31,6 +32,7 @@ public sealed class FoundationRuntime
     public NumberingService Numbering { get; }
     public PhotoStorageService Photos { get; }
     public BackupService Backups { get; }
+    public WorkCalendarService Calendar { get; }
     public RegistryRuntime Registry { get; }
     public OrdersRuntime Orders { get; }
     public OperationsRuntime Operations { get; }
