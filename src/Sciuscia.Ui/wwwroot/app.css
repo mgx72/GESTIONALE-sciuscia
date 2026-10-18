@@ -895,3 +895,58 @@ button.pericoloso:hover {
 .riga-carico-chiuso td {
   color: var(--text-muted);
 }
+
+.grafico-carico {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  margin: 4px 0 18px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.grafico-carico-colonna {
+  flex: 1 0 16px;
+  min-width: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.grafico-carico-valore {
+  font-size: 10px;
+  color: var(--text-muted);
+  height: 14px;
+}
+
+.grafico-carico-traccia {
+  position: relative;
+  width: 100%;
+  height: 90px;
+  background: var(--bg);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.grafico-carico-barra {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: var(--primary);
+}
+
+.grafico-carico-barra.chiuso {
+  background: var(--border);
+}
+
+.grafico-carico-barra.mezza {
+  background: #e3b341;
+}
+
+.grafico-carico-giorno {
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  white-space: nowrap;
+}

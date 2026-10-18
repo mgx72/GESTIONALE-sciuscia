@@ -1055,9 +1055,26 @@
     try {
       await window.sciuscia.call("articoli.cambiaStato", { articoloId, rowVersion, nuovoStato });
       await ricaricaDettaglioCommessa();
+      if (nuovoStato === "PRONTO_DA_AVVISARE"
+          && window.confirm("Articolo segnato come pronto. Preparare subito il messaggio di avviso al cliente?")) {
+        apriModaleMessaggioPerArticolo(articoloId);
+      }
     } catch (errore) {
       mostraErrore("Cambio stato non riuscito: " + errore.message);
       await ricaricaDettaglioCommessa();
+    }
+  }
+
+  /// Apre la finestra "Prepara messaggio" già pronta per avvisare un singolo articolo appena
+  /// segnato pronto, con solo quell'articolo selezionato nell'elenco (l'operatore può comunque
+  /// aggiungerne altri prima di salvare).
+  function apriModaleMessaggioPerArticolo(itemId) {
+    apriModaleMessaggio();
+    const checkbox = document.querySelector(`#messaggio-lista-articoli input[value="${itemId}"]`);
+    if (checkbox) {
+      document.querySelectorAll("#messaggio-lista-articoli input[type=checkbox]").forEach((c) => {
+        c.checked = c === checkbox;
+      });
     }
   }
 
@@ -2811,21 +2828,44 @@
       return;
     }
     nascondiErrore();
+    const articolo = anteprimaAgendaCorrente;
     try {
       await window.sciuscia.call("articoli.cambiaStato", {
-        articoloId: anteprimaAgendaCorrente.item.itemId,
-        rowVersion: anteprimaAgendaCorrente.item.rowVersion,
+        articoloId: articolo.item.itemId,
+        rowVersion: articolo.item.rowVersion,
         nuovoStato: "PRONTO_DA_AVVISARE",
       });
       chiudiModaleAnteprimaAgenda();
       await caricaAgenda();
+      if (window.confirm("Articolo segnato come pronto. Preparare subito il messaggio di avviso al cliente?")) {
+        await apriCommessaDaAgenda(articolo.orderId, articolo.item.itemId);
+        apriModaleMessaggioPerArticolo(articolo.item.itemId);
+      }
     } catch (errore) {
       mostraErrore("Non è stato possibile segnare l'articolo come pronto: " + errore.message);
     }
   }
 
+  /// Stampa esattamente quello che si vede a schermo nell'Agenda (stesso intervallo di date e
+  /// stessa modalità, raggruppata o per giorno): una copia su carta da consultare lavorando.
+  /// Non è legata a una commessa, quindi non viene registrata tra le stampe come etichette/ricevute.
+  function stampaAgenda() {
+    const contenuto = document.getElementById("agenda-contenuto");
+    if (!contenuto.innerHTML.trim()) {
+      mostraErrore("Non c'è nulla da stampare: aggiorna prima l'agenda.");
+      return;
+    }
+    const daData = document.getElementById("agenda-da-data").value;
+    const aData = document.getElementById("agenda-a-data").value;
+    const sottotitolo = daData && aData
+      ? `<p>Dal ${escapeHtml(formattaDataItaliana(daData))} al ${escapeHtml(formattaDataItaliana(aData))}</p>`
+      : "";
+    stampaDocumenti([], "Agenda lavori", sottotitolo + contenuto.innerHTML);
+  }
+
   document.getElementById("btn-aggiorna-agenda").addEventListener("click", caricaAgenda);
   document.getElementById("agenda-raggruppa-lavorazione").addEventListener("change", renderAgenda);
+  document.getElementById("btn-stampa-agenda").addEventListener("click", stampaAgenda);
   document.getElementById("btn-chiudi-anteprima-agenda").addEventListener("click", chiudiModaleAnteprimaAgenda);
   document.getElementById("btn-apri-commessa-agenda").addEventListener("click", () => {
     if (anteprimaAgendaCorrente) {
@@ -2902,8 +2942,41 @@
       for (const giorno of giorniCalendario || []) {
         corpo.appendChild(costruisciRigaCarico(giorno, carichiPerGiorno.get(giorno.date)));
       }
+      costruisciGraficoCarico(giorniCalendario || [], carichiPerGiorno);
     } catch (errore) {
       mostraErrore("Non è stato possibile consultare il carico: " + errore.message);
+    }
+  }
+
+  /// Un grafico a barre semplice (senza librerie esterne), un po' com'è già stata scritta
+  /// l'importazione Excel: ogni colonna è un giorno, l'altezza è proporzionale al numero di
+  /// articoli già previsti quel giorno, il colore segue l'esito del giorno (lavorativo, mezza
+  /// giornata, chiuso).
+  function costruisciGraficoCarico(giorniCalendario, carichiPerGiorno) {
+    const contenitore = document.getElementById("carico-grafico");
+    contenitore.innerHTML = "";
+    if (giorniCalendario.length === 0) {
+      return;
+    }
+
+    const massimo = Math.max(1, ...giorniCalendario.map((g) => (carichiPerGiorno.get(g.date) || { totale: 0 }).totale));
+
+    for (const giorno of giorniCalendario) {
+      const carico = carichiPerGiorno.get(giorno.date) || { totale: 0, urgenti: 0, prioritari: 0 };
+      const classeBarra = giorno.capacityFactor === 0 ? "chiuso" : giorno.capacityFactor === 0.5 ? "mezza" : "";
+      const altezza = Math.max(2, Math.round((carico.totale / massimo) * 100));
+      const motivoChiusura = giorno.capacityFactor < 1 ? ` (${giorno.reason})` : "";
+      const titolo = `${formattaDataItaliana(giorno.date)} — ${carico.totale} previst${carico.totale === 1 ? "o" : "i"}${motivoChiusura}`;
+
+      const colonna = document.createElement("div");
+      colonna.className = "grafico-carico-colonna";
+      colonna.title = titolo;
+      colonna.innerHTML = `
+        <div class="grafico-carico-valore">${carico.totale > 0 ? carico.totale : ""}</div>
+        <div class="grafico-carico-traccia"><div class="grafico-carico-barra ${classeBarra}" style="height:${altezza}%"></div></div>
+        <div class="grafico-carico-giorno">${new Date(giorno.date + "T00:00:00").getDate()}</div>
+      `;
+      contenitore.appendChild(colonna);
     }
   }
 

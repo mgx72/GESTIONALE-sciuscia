@@ -222,6 +222,7 @@
           <div class="azioni-header">
             <label><input type="checkbox" id="agenda-raggruppa-lavorazione" /> Raggruppa per lavorazione</label>
             <button type="button" id="btn-aggiorna-agenda">Aggiorna</button>
+            <button type="button" id="btn-stampa-agenda">Stampa agenda</button>
           </div>
         </div>
         <div id="agenda-contenuto"></div>
@@ -349,6 +350,8 @@
       <div class="field checkbox-field" id="carico-applica-tutti-contenitore" hidden>
         <label><input type="checkbox" id="carico-applica-tutti" /> Applica a tutti gli articoli di questa commessa (si potrà correggere dopo sulle eccezioni)</label>
       </div>
+      <p class="subtitle-inline">Articoli previsti per giorno (passa il mouse su una colonna per i dettagli):</p>
+      <div id="carico-grafico" class="grafico-carico"></div>
       <div class="panel">
         <table>
           <thead>
