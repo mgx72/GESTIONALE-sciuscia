@@ -74,7 +74,11 @@
 
   const vistaAnagrafiche = document.getElementById("view-anagrafiche");
   const vistaImpostazioni = document.getElementById("view-impostazioni");
+  const vistaAgenda = document.getElementById("view-agenda");
   let ricercaClientiAnagraficaInCorso = null;
+  let articoloDaEvidenziareId = null;
+  let agendaCache = [];
+  let anteprimaAgendaCorrente = null;
 
   let clienteSelezionatoId = null;
   let ricercaInCorso = null;
@@ -340,6 +344,15 @@
     renderRitiri(dettaglio);
     renderMessaggi(dettaglio);
     renderStampe(dettaglio);
+
+    if (articoloDaEvidenziareId) {
+      const schedaEvidenziata = listaArticoli.querySelector(`[data-item-id="${articoloDaEvidenziareId}"]`);
+      if (schedaEvidenziata) {
+        schedaEvidenziata.classList.add("scheda-articolo-evidenziata");
+        schedaEvidenziata.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      articoloDaEvidenziareId = null;
+    }
   }
 
   // --- Operazioni: Pagamenti ---
@@ -775,6 +788,7 @@
     const articolo = dettaglioArticolo.item;
     const scheda = document.createElement("div");
     scheda.className = "panel scheda-articolo";
+    scheda.dataset.itemId = articolo.itemId;
 
     const etichettaStato = ETICHETTE_STATO[articolo.workflowStatus] || articolo.workflowStatus;
     const bollini = [];
@@ -859,6 +873,31 @@
         evento.stopPropagation();
         eliminaFoto(f.photoId, f.rowVersion);
       });
+      galleria.appendChild(miniatura);
+    }
+
+    contenitore.appendChild(galleria);
+    return contenitore;
+  }
+
+  /// Galleria di sola lettura (senza il pulsante Elimina), usata nell'anteprima dell'Agenda:
+  /// quella finestra serve solo a dare un'occhiata rapida, non a gestire le fotografie.
+  function costruisciGalleriaFotoSoloLettura(foto) {
+    const contenitore = document.createElement("div");
+
+    if (foto.length === 0) {
+      contenitore.innerHTML = '<div class="nessuna-foto">Nessuna fotografia.</div>';
+      return contenitore;
+    }
+
+    const galleria = document.createElement("div");
+    galleria.className = "galleria-foto";
+
+    for (const f of foto) {
+      const miniatura = document.createElement("div");
+      miniatura.className = "miniatura-foto";
+      miniatura.innerHTML = `<img src="${f.dataUrl}" alt="Fotografia articolo" />`;
+      miniatura.querySelector("img").addEventListener("click", () => mostraFotoGrande(f.dataUrl));
       galleria.appendChild(miniatura);
     }
 
@@ -1613,8 +1652,10 @@
 
   function mostraSchermataCommesse() {
     document.getElementById("nav-commesse").classList.add("active");
+    document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
+    vistaAgenda.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     mostraVistaElenco();
@@ -1624,9 +1665,11 @@
   function mostraSchermataAnagrafiche() {
     document.getElementById("nav-anagrafiche").classList.add("active");
     document.getElementById("nav-commesse").classList.remove("active");
+    document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaElenco.hidden = true;
     vistaDettaglio.hidden = true;
+    vistaAgenda.hidden = true;
     vistaImpostazioni.hidden = true;
     vistaAnagrafiche.hidden = false;
     nascondiErrore();
@@ -1636,9 +1679,11 @@
   function mostraSchermataImpostazioni() {
     document.getElementById("nav-impostazioni").classList.add("active");
     document.getElementById("nav-commesse").classList.remove("active");
+    document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     vistaElenco.hidden = true;
     vistaDettaglio.hidden = true;
+    vistaAgenda.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = false;
     nascondiErrore();
@@ -1651,6 +1696,26 @@
     caricaCalendario();
   }
 
+  function mostraSchermataAgenda() {
+    document.getElementById("nav-agenda").classList.add("active");
+    document.getElementById("nav-commesse").classList.remove("active");
+    document.getElementById("nav-anagrafiche").classList.remove("active");
+    document.getElementById("nav-impostazioni").classList.remove("active");
+    vistaElenco.hidden = true;
+    vistaDettaglio.hidden = true;
+    vistaAnagrafiche.hidden = true;
+    vistaImpostazioni.hidden = true;
+    vistaAgenda.hidden = false;
+    nascondiErrore();
+    if (!document.getElementById("agenda-da-data").value) {
+      const oggi = new Date();
+      const inDueSettimane = new Date(oggi.getTime() + 13 * 24 * 60 * 60 * 1000);
+      document.getElementById("agenda-da-data").value = formattaDataPerInput(oggi);
+      document.getElementById("agenda-a-data").value = formattaDataPerInput(inDueSettimane);
+    }
+    caricaAgenda();
+  }
+
   function formattaDataPerInput(data) {
     const anno = data.getFullYear();
     const mese = String(data.getMonth() + 1).padStart(2, "0");
@@ -1661,6 +1726,7 @@
   document.getElementById("nav-commesse").addEventListener("click", mostraSchermataCommesse);
   document.getElementById("nav-anagrafiche").addEventListener("click", mostraSchermataAnagrafiche);
   document.getElementById("nav-impostazioni").addEventListener("click", mostraSchermataImpostazioni);
+  document.getElementById("nav-agenda").addEventListener("click", mostraSchermataAgenda);
 
   document.querySelectorAll("#view-anagrafiche .tab-btn").forEach((bottone) => {
     bottone.addEventListener("click", () => {
@@ -2506,6 +2572,256 @@
   document.getElementById("btn-salva-chiusura-calendario").addEventListener("click", salvaChiusuraCalendario);
   document.getElementById("btn-annulla-apertura-calendario").addEventListener("click", chiudiModaleAperturaCalendario);
   document.getElementById("btn-salva-apertura-calendario").addEventListener("click", salvaAperturaCalendario);
+
+  // --- Agenda lavori ---
+
+  async function caricaAgenda() {
+    nascondiErrore();
+    try {
+      agendaCache = await window.sciuscia.call("agenda.elenco");
+      await renderAgenda();
+    } catch (errore) {
+      mostraErrore("Non è stato possibile caricare l'agenda: " + errore.message);
+    }
+  }
+
+  /// Le prossime `numeroGiorni` date lavorative da oggi (capacità > 0), per evidenziare gli
+  /// articoli che entrano nella soglia senza spostarli dal loro giorno (vedi la specifica,
+  /// "la soglia serve a evidenziarli, non a spostarli").
+  function estraiProssimiGiorniLavorativi(giorniCalendario, oggiTesto, numeroGiorni) {
+    const risultato = new Set();
+    for (const giorno of giorniCalendario) {
+      if (giorno.date < oggiTesto) continue;
+      if (giorno.capacityFactor > 0) {
+        risultato.add(giorno.date);
+        if (risultato.size >= numeroGiorni) break;
+      }
+    }
+    return risultato;
+  }
+
+  async function renderAgenda() {
+    const daData = document.getElementById("agenda-da-data").value;
+    const aData = document.getElementById("agenda-a-data").value;
+    const raggruppa = document.getElementById("agenda-raggruppa-lavorazione").checked;
+    const contenitore = document.getElementById("agenda-contenuto");
+    contenitore.innerHTML = "";
+
+    if (!daData || !aData) {
+      return;
+    }
+
+    const oggiTesto = formattaDataPerInput(new Date());
+    const inizioCalendario = daData < oggiTesto ? daData : oggiTesto;
+    const margineLavorativi = formattaDataPerInput(new Date(new Date(oggiTesto + "T00:00:00").getTime() + 20 * 24 * 60 * 60 * 1000));
+    const fineCalendario = aData > margineLavorativi ? aData : margineLavorativi;
+
+    let giorniCalendario = [];
+    try {
+      giorniCalendario = await window.sciuscia.call("impostazioni.calendario", { daData: inizioCalendario, aData: fineCalendario }) || [];
+    } catch (errore) {
+      mostraErrore("Non è stato possibile leggere il calendario aperture: " + errore.message);
+    }
+
+    const infoGiorno = new Map(giorniCalendario.map((g) => [g.date, g]));
+    const prossimiLavorativi = estraiProssimiGiorniLavorativi(giorniCalendario, oggiTesto, 5);
+
+    const articoli = agendaCache.map((articolo) => {
+      const dataPrevista = articolo.item.dueDate;
+      const scaduto = !!dataPrevista && dataPrevista < oggiTesto;
+      const inScadenza = !scaduto && !!dataPrevista && prossimiLavorativi.has(dataPrevista);
+      return { ...articolo, scaduto, inScadenza };
+    });
+
+    const inPeriodo = articoli.filter((articolo) => {
+      if (articolo.scaduto || !articolo.item.dueDate) {
+        return true;
+      }
+      return articolo.item.dueDate >= daData && articolo.item.dueDate <= aData;
+    });
+
+    document.getElementById("agenda-stato-vuoto").hidden = inPeriodo.length > 0;
+    if (inPeriodo.length === 0) {
+      return;
+    }
+
+    if (raggruppa) {
+      renderAgendaRaggruppata(contenitore, inPeriodo);
+    } else {
+      renderAgendaPerGiorno(contenitore, inPeriodo, infoGiorno);
+    }
+  }
+
+  function renderAgendaPerGiorno(contenitore, articoli, infoGiorno) {
+    const arretrati = articoli.filter((a) => a.scaduto);
+    const senzaData = articoli.filter((a) => !a.scaduto && !a.item.dueDate);
+    const perData = new Map();
+    for (const articolo of articoli) {
+      if (articolo.scaduto || !articolo.item.dueDate) {
+        continue;
+      }
+      if (!perData.has(articolo.item.dueDate)) {
+        perData.set(articolo.item.dueDate, []);
+      }
+      perData.get(articolo.item.dueDate).push(articolo);
+    }
+
+    if (arretrati.length > 0) {
+      contenitore.appendChild(costruisciGruppoAgenda("Arretrati", arretrati, null, false));
+    }
+
+    for (const data of Array.from(perData.keys()).sort()) {
+      const giorno = infoGiorno.get(data);
+      const titolo = `${NOMI_GIORNI_SETTIMANA[new Date(data + "T00:00:00").getDay()]} ${formattaDataItaliana(data)}`;
+      const nota = giorno && giorno.capacityFactor < 1 ? giorno.reason : null;
+      contenitore.appendChild(costruisciGruppoAgenda(titolo, perData.get(data), nota, false));
+    }
+
+    if (senzaData.length > 0) {
+      contenitore.appendChild(costruisciGruppoAgenda("Senza data prevista", senzaData, null, false));
+    }
+  }
+
+  function renderAgendaRaggruppata(contenitore, articoli) {
+    const gruppi = new Map();
+    for (const articolo of articoli) {
+      const lavorazioni = articolo.works.length > 0
+        ? articolo.works
+        : [{ etichetta: "Senza lavorazione interna indicata", ordine: Number.MAX_SAFE_INTEGER }];
+      for (const lavorazione of lavorazioni) {
+        if (!gruppi.has(lavorazione.etichetta)) {
+          gruppi.set(lavorazione.etichetta, { ordine: lavorazione.ordine, voci: [] });
+        }
+        gruppi.get(lavorazione.etichetta).voci.push(articolo);
+      }
+    }
+
+    const etichette = Array.from(gruppi.keys()).sort((a, b) => {
+      const differenza = gruppi.get(a).ordine - gruppi.get(b).ordine;
+      return differenza !== 0 ? differenza : a.localeCompare(b, "it");
+    });
+
+    for (const etichetta of etichette) {
+      contenitore.appendChild(costruisciGruppoAgenda(etichetta, gruppi.get(etichetta).voci, null, true));
+    }
+  }
+
+  function costruisciGruppoAgenda(titolo, voci, nota, mostraData) {
+    const gruppo = document.createElement("div");
+    gruppo.className = "agenda-gruppo";
+    const notaHtml = nota ? `<span class="chiusura-giorno">— ${escapeHtml(nota)}</span>` : "";
+    gruppo.innerHTML = `<h3 class="agenda-gruppo-titolo">${escapeHtml(titolo)} ${notaHtml}</h3>`;
+    for (const articolo of voci) {
+      gruppo.appendChild(costruisciSchedaAgenda(articolo, mostraData));
+    }
+    return gruppo;
+  }
+
+  function costruisciSchedaAgenda(articolo, mostraData) {
+    const item = articolo.item;
+    const scheda = document.createElement("div");
+    scheda.className = "panel scheda-agenda";
+    if (articolo.scaduto) {
+      scheda.classList.add("scaduta");
+    } else if (articolo.inScadenza) {
+      scheda.classList.add("in-scadenza");
+    }
+
+    const bollini = [];
+    if (item.isUrgent) bollini.push('<span class="badge urgente">Urgente</span>');
+    if (item.isPriority) bollini.push('<span class="badge priorita">Priorità</span>');
+    if (articolo.scaduto) bollini.push('<span class="badge arretrato">Arretrato</span>');
+
+    const dataTesto = mostraData ? (item.dueDate ? formattaDataItaliana(item.dueDate) : "Senza data") : "";
+    const nomiLavorazioni = articolo.works.length > 0
+      ? articolo.works.map((w) => w.etichetta).join(", ")
+      : "Nessuna lavorazione interna indicata";
+
+    scheda.innerHTML = `
+      <div class="scheda-agenda-intestazione">
+        <div>
+          <strong>${escapeHtml(item.visibleCode)}</strong> — ${escapeHtml(articolo.categoryName)} / ${escapeHtml(articolo.brandName)}
+          ${bollini.join(" ")}
+          <div class="descrizione-articolo">${escapeHtml(articolo.customerName)} — ${escapeHtml(item.description)}</div>
+          <div class="scheda-agenda-lavorazioni">${escapeHtml(nomiLavorazioni)}</div>
+        </div>
+        ${dataTesto ? `<div class="scheda-agenda-data">${escapeHtml(dataTesto)}</div>` : ""}
+      </div>
+    `;
+    scheda.addEventListener("click", () => apriAnteprimaAgenda(articolo));
+    return scheda;
+  }
+
+  async function apriAnteprimaAgenda(articolo) {
+    nascondiErrore();
+    anteprimaAgendaCorrente = articolo;
+    document.getElementById("anteprima-agenda-titolo").textContent =
+      articolo.item.visibleCode + " — " + articolo.categoryName + " / " + articolo.brandName;
+    document.getElementById("anteprima-agenda-sottotitolo").textContent =
+      articolo.orderVisibleCode + " · " + articolo.customerName;
+    document.getElementById("anteprima-agenda-lavorazioni").textContent =
+      articolo.works.length > 0 ? articolo.works.map((w) => w.etichetta).join(", ") : "Nessuna lavorazione interna indicata.";
+    const contenitoreFoto = document.getElementById("anteprima-agenda-foto");
+    contenitoreFoto.innerHTML = "";
+    document.getElementById("modal-anteprima-agenda").hidden = false;
+
+    try {
+      const dettaglio = await window.sciuscia.call("commesse.dettaglio", { commessaId: articolo.orderId });
+      const dettaglioArticolo = (dettaglio.items || []).find((d) => d.item.itemId === articolo.item.itemId);
+      if (dettaglioArticolo) {
+        anteprimaAgendaCorrente = { ...articolo, item: dettaglioArticolo.item };
+        contenitoreFoto.appendChild(costruisciGalleriaFotoSoloLettura(dettaglioArticolo.photos || []));
+      }
+    } catch (errore) {
+      mostraErrore("Non è stato possibile caricare le fotografie: " + errore.message);
+    }
+  }
+
+  function chiudiModaleAnteprimaAgenda() {
+    document.getElementById("modal-anteprima-agenda").hidden = true;
+    anteprimaAgendaCorrente = null;
+  }
+
+  async function apriCommessaDaAgenda(orderId, itemId) {
+    chiudiModaleAnteprimaAgenda();
+    articoloDaEvidenziareId = itemId;
+    document.getElementById("nav-commesse").classList.add("active");
+    document.getElementById("nav-agenda").classList.remove("active");
+    document.getElementById("nav-anagrafiche").classList.remove("active");
+    document.getElementById("nav-impostazioni").classList.remove("active");
+    vistaAgenda.hidden = true;
+    vistaAnagrafiche.hidden = true;
+    vistaImpostazioni.hidden = true;
+    await apriDettaglioCommessa(orderId);
+  }
+
+  async function segnaProntoDaAgenda() {
+    if (!anteprimaAgendaCorrente) {
+      return;
+    }
+    nascondiErrore();
+    try {
+      await window.sciuscia.call("articoli.cambiaStato", {
+        articoloId: anteprimaAgendaCorrente.item.itemId,
+        rowVersion: anteprimaAgendaCorrente.item.rowVersion,
+        nuovoStato: "PRONTO_DA_AVVISARE",
+      });
+      chiudiModaleAnteprimaAgenda();
+      await caricaAgenda();
+    } catch (errore) {
+      mostraErrore("Non è stato possibile segnare l'articolo come pronto: " + errore.message);
+    }
+  }
+
+  document.getElementById("btn-aggiorna-agenda").addEventListener("click", caricaAgenda);
+  document.getElementById("agenda-raggruppa-lavorazione").addEventListener("change", renderAgenda);
+  document.getElementById("btn-chiudi-anteprima-agenda").addEventListener("click", chiudiModaleAnteprimaAgenda);
+  document.getElementById("btn-apri-commessa-agenda").addEventListener("click", () => {
+    if (anteprimaAgendaCorrente) {
+      apriCommessaDaAgenda(anteprimaAgendaCorrente.orderId, anteprimaAgendaCorrente.item.itemId);
+    }
+  });
+  document.getElementById("btn-segna-pronto-agenda").addEventListener("click", segnaProntoDaAgenda);
 
   caricaCommesse();
 })();

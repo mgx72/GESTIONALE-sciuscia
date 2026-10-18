@@ -67,6 +67,7 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                 "impostazioni.creaChiusuraCalendario" => await CreaChiusuraCalendarioAsync(request.Payload),
                 "impostazioni.creaAperturaCalendario" => await CreaAperturaCalendarioAsync(request.Payload),
                 "impostazioni.eliminaEccezioneCalendario" => await EliminaEccezioneCalendarioAsync(request.Payload),
+                "agenda.elenco" => await AgendaElencoAsync(),
                 "anagrafiche.artigiani" => await runtime.Registry.Artisans.ListAsync(OptionalBool(request.Payload, "includiInattive") ?? false),
                 "anagrafiche.creaArtigiano" => await CreaArtigianoAsync(request.Payload),
                 "anagrafiche.modificaArtigiano" => await ModificaArtigianoAsync(request.Payload),
@@ -194,6 +195,46 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         return new OrderDetailDto(
             order, customerName, customer?.MobileOriginal, customer?.Email, financials, itemDetails,
             payments, pickups, messages, prints);
+    }
+
+    /// <summary>
+    /// Elenco degli articoli "Da lavorare" per l'Agenda lavori (specifica, sezione 5). L'ordine dei
+    /// gruppi di lavorazione segue lo stesso ordine del Listino (Anagrafiche → Listino lavorazioni,
+    /// "Sposta su/giù"): qui si usa semplicemente la posizione di ciascuna lavorazione nell'elenco
+    /// già ordinato, senza bisogno di leggere la colonna sort_order a parte. Le lavorazioni a testo
+    /// libero (non collegate al Listino) non hanno una posizione e vanno sempre in fondo.
+    /// </summary>
+    private async Task<IReadOnlyList<AgendaItemDto>> AgendaElencoAsync()
+    {
+        var righe = await runtime.Orders.Agenda.ListDaLavorareAsync();
+        var listino = await runtime.Registry.WorkTypes.ListAsync(includeInactive: true);
+        var ordineLavorazione = new Dictionary<string, int>();
+        for (var indice = 0; indice < listino.Count; indice++)
+        {
+            ordineLavorazione[listino[indice].WorkTypeId] = indice;
+        }
+
+        var risultati = new List<AgendaItemDto>();
+        foreach (var riga in righe)
+        {
+            var lavorazioni = await runtime.Orders.ItemWorks.ListByItemAsync(riga.Item.ItemId);
+            var lavorazioniInterne = lavorazioni
+                .Where(w => w.CanceledAt is null && w.ExecutionType == "INTERNA")
+                .Select(w => new AgendaWorkDto(
+                    w.AppliedLabelText,
+                    w.SourceWorkTypeId is not null && ordineLavorazione.TryGetValue(w.SourceWorkTypeId, out var posizione)
+                        ? posizione
+                        : int.MaxValue))
+                .OrderBy(w => w.Ordine)
+                .ThenBy(w => w.Etichetta)
+                .ToList();
+
+            risultati.Add(new AgendaItemDto(
+                riga.Item, riga.OrderId, riga.OrderVisibleCode, riga.CustomerName, riga.CategoryName, riga.BrandName,
+                lavorazioniInterne));
+        }
+
+        return risultati;
     }
 
     /// <summary>
@@ -806,6 +847,19 @@ internal sealed record OrderDetailDto(
 internal sealed record ItemDetailDto(ItemRecord Item, string CategoryName, string BrandName, IReadOnlyList<ItemWorkDetailDto> Works, IReadOnlyList<PhotoDto> Photos);
 
 internal sealed record ItemWorkDetailDto(ItemWorkRecord Work, string? ArtisanName);
+
+/// <summary>Un articolo "Da lavorare" per l'Agenda, con solo le lavorazioni interne non annullate.</summary>
+internal sealed record AgendaItemDto(
+    ItemRecord Item,
+    string OrderId,
+    string OrderVisibleCode,
+    string CustomerName,
+    string CategoryName,
+    string BrandName,
+    IReadOnlyList<AgendaWorkDto> Works);
+
+/// <summary>Una lavorazione interna mostrata nell'Agenda, con la sua posizione nell'ordine del Listino (per il raggruppamento).</summary>
+internal sealed record AgendaWorkDto(string Etichetta, int Ordine);
 
 /// <summary>Fotografia pronta per la pagina: l'immagine è già inclusa come data URL, così la pagina la mostra senza un'altra richiesta.</summary>
 internal sealed record PhotoDto(

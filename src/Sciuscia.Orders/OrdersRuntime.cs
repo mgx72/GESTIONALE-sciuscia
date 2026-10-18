@@ -15,6 +15,7 @@ public sealed class OrdersRuntime
         ItemWorks = new ItemWorkService(paths, maintenanceGate);
         ExternalAssignments = new ExternalAssignmentService(paths, maintenanceGate);
         Photos = new PhotoService(paths, maintenanceGate, photoStorage, Orders, Items);
+        Agenda = new AgendaService(paths);
     }
 
     public OrderService Orders { get; }
@@ -22,4 +23,5 @@ public sealed class OrdersRuntime
     public ItemWorkService ItemWorks { get; }
     public ExternalAssignmentService ExternalAssignments { get; }
     public PhotoService Photos { get; }
+    public AgendaService Agenda { get; }
 }

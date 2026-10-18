@@ -790,3 +790,80 @@ button.pericoloso:hover {
   font-weight: 400;
   margin: 6px 0;
 }
+
+/* --- Agenda lavori --- */
+
+.badge.arretrato {
+  background: var(--danger);
+  color: #fff;
+  margin-left: 8px;
+}
+
+.agenda-gruppo {
+  margin-bottom: 22px;
+}
+
+.agenda-gruppo-titolo {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.agenda-gruppo-titolo .chiusura-giorno {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.scheda-agenda {
+  padding: 12px 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+
+.scheda-agenda:hover {
+  background: #fafbfc;
+}
+
+.scheda-agenda.scaduta {
+  border-left-color: var(--danger);
+}
+
+.scheda-agenda.in-scadenza {
+  border-left-color: #c98a00;
+}
+
+.scheda-agenda-intestazione {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.scheda-agenda-data {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.scheda-agenda-lavorazioni {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.scheda-articolo-evidenziata {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.anteprima-agenda-lavorazioni {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 10px 0;
+}

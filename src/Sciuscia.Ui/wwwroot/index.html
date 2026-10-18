@@ -10,6 +10,7 @@
     <nav class="sidebar">
       <h1>Sciuscià</h1>
       <a class="nav-item active" data-view="commesse" id="nav-commesse">Commesse</a>
+      <a class="nav-item" data-view="agenda" id="nav-agenda">Agenda lavori</a>
       <a class="nav-item" data-view="anagrafiche" id="nav-anagrafiche">Anagrafiche</a>
       <a class="nav-item" data-view="impostazioni" id="nav-impostazioni">Impostazioni</a>
     </nav>
@@ -200,6 +201,33 @@
         </div>
       </div>
 
+      <div id="view-agenda" hidden>
+        <div class="main-header">
+          <h2>Agenda lavori</h2>
+        </div>
+        <p class="subtitle-inline">
+          Articoli con lavorazioni interne ancora da fare, collocati nel giorno di consegna previsto. Gli arretrati compaiono sempre in cima, evidenziati.
+        </p>
+        <div class="main-header">
+          <div class="field-doppio" style="flex:0 0 auto; gap:10px;">
+            <div class="field">
+              <label for="agenda-da-data">Dal</label>
+              <input type="date" id="agenda-da-data" />
+            </div>
+            <div class="field">
+              <label for="agenda-a-data">Al</label>
+              <input type="date" id="agenda-a-data" />
+            </div>
+          </div>
+          <div class="azioni-header">
+            <label><input type="checkbox" id="agenda-raggruppa-lavorazione" /> Raggruppa per lavorazione</label>
+            <button type="button" id="btn-aggiorna-agenda">Aggiorna</button>
+          </div>
+        </div>
+        <div id="agenda-contenuto"></div>
+        <div id="agenda-stato-vuoto" class="empty-state" hidden>Nessun articolo da lavorare nel periodo selezionato.</div>
+      </div>
+
       <div id="view-impostazioni" hidden>
         <div class="main-header">
           <h2>Impostazioni</h2>
@@ -284,6 +312,20 @@
       <div class="modal-actions">
         <button type="button" id="btn-annulla-apertura-calendario">Annulla</button>
         <button type="button" id="btn-salva-apertura-calendario" class="primary">Salva apertura</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-anteprima-agenda" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3 id="anteprima-agenda-titolo"></h3>
+      <p class="subtitle" id="anteprima-agenda-sottotitolo"></p>
+      <div id="anteprima-agenda-lavorazioni"></div>
+      <div id="anteprima-agenda-foto"></div>
+      <div class="modal-actions">
+        <button type="button" id="btn-chiudi-anteprima-agenda">Chiudi</button>
+        <button type="button" id="btn-apri-commessa-agenda">Apri commessa</button>
+        <button type="button" id="btn-segna-pronto-agenda" class="primary">Segna pronto</button>
       </div>
     </div>
   </div>
