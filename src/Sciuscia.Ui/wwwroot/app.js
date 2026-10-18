@@ -594,6 +594,28 @@
           return "Gentile cliente, per la commessa " + codice + " dobbiamo ancora definire il prezzo per: " +
             voci.join("; ") + ". Ci faccia sapere come procedere, grazie.";
         }
+        if (articoliSelezionati.length === 1) {
+          const articoloSelezionato = articoliSelezionati[0];
+          const dettagliArticolo = articoloSelezionato.brandName
+            ? articoloSelezionato.categoryName + ", " + articoloSelezionato.brandName
+            : articoloSelezionato.categoryName;
+
+          // Commessa con un solo articolo: il totale della commessa è senza ambiguità il totale di
+          // quell'articolo, basta citare categoria/marca per contestualizzare.
+          if (dettaglio.items.length === 1) {
+            return "Gentile cliente, per la commessa " + codice + " (" + dettagliArticolo + ") il preventivo è di " +
+              formattaEuro(dettaglio.financials.totalCents) + ". Fateci sapere se possiamo procedere.";
+          }
+
+          // Commessa con più articoli: il totale della commessa include anche gli altri articoli,
+          // quindi citiamo anche la lavorazione per chiarire a cosa si riferisce il preventivo.
+          const nomiLavorazioni = articoloSelezionato.works
+            .filter((dl) => dl.work.canceledAt == null && dl.work.approvalStatus !== "RIFIUTATA")
+            .map((dl) => dl.work.appliedName);
+          const perLavorazione = nomiLavorazioni.length > 0 ? " per " + nomiLavorazioni.join(" e ") : "";
+          return "Gentile cliente, per la commessa " + codice + " il preventivo" + perLavorazione + " (" + dettagliArticolo +
+            ") è di " + formattaEuro(dettaglio.financials.totalCents) + ". Fateci sapere se possiamo procedere.";
+        }
         return "Gentile cliente, il preventivo per la commessa " + codice + " è di " +
           formattaEuro(dettaglio.financials.totalCents) + ". Fateci sapere se possiamo procedere.";
       }
@@ -1398,15 +1420,20 @@
   async function creaLavorazione() {
     const workTypeId = selectLavorazioneTipo.value || null;
     const nome = document.getElementById("lavorazione-nome").value.trim();
-    const testoEtichetta = document.getElementById("lavorazione-etichetta").value.trim();
+    // Se non viene scelta una voce del Listino, il testo del cartellino va digitato a mano:
+    // se Mariagrazia lo lascia vuoto, usiamo il nome della lavorazione (così non deve scriverlo due volte).
+    let testoEtichetta = document.getElementById("lavorazione-etichetta").value.trim();
     const prezzoTesto = document.getElementById("lavorazione-prezzo").value.trim();
     const fascia = campoFascia.hidden ? null : (selectLavorazioneFascia.value || null);
     const esterna = checkboxEsterna.checked;
     const artigianoId = esterna ? document.getElementById("lavorazione-artigiano").value : null;
 
-    if (!nome || !testoEtichetta) {
-      mostraErrore("Nome e testo etichetta della lavorazione sono obbligatori.");
+    if (!nome) {
+      mostraErrore("Il nome della lavorazione è obbligatorio.");
       return;
+    }
+    if (!testoEtichetta) {
+      testoEtichetta = nome;
     }
     if (esterna && !artigianoId) {
       mostraErrore("Selezionare l'artigiano per una lavorazione esterna.");
@@ -2953,6 +2980,8 @@
   /// `contesto` è null quando la finestra è aperta dal modulo "Nuovo articolo" (la data scelta va
   /// solo scritta nel campo, l'articolo non esiste ancora), oppure { articoloEsistente, commessaId }
   /// quando è apribile dalla scheda di un articolo già creato (la data va salvata subito).
+  let modaleNuovoArticoloEraAperto = false;
+
   async function apriConsultaCarico(contesto) {
     nascondiErrore();
     consultaCaricoContesto = contesto || null;
@@ -2966,6 +2995,14 @@
       document.getElementById("carico-a-data").value = formattaDataPerInput(inSetteSettimane);
     }
 
+    // Se la finestra viene aperta da "Nuovo articolo" (entrambe le finestre hanno la stessa
+    // sovrapposizione), la nascondiamo senza annullarla, così non si perde quanto già compilato:
+    // torna visibile, con i suoi campi intatti, alla chiusura di Consulta carico.
+    modaleNuovoArticoloEraAperto = !modaleArticolo.hidden;
+    if (modaleNuovoArticoloEraAperto) {
+      modaleArticolo.hidden = true;
+    }
+
     document.getElementById("modal-consulta-carico").hidden = false;
     await caricaConsultaCarico();
   }
@@ -2973,6 +3010,10 @@
   function chiudiConsultaCarico() {
     document.getElementById("modal-consulta-carico").hidden = true;
     consultaCaricoContesto = null;
+    if (modaleNuovoArticoloEraAperto) {
+      modaleArticolo.hidden = false;
+      modaleNuovoArticoloEraAperto = false;
+    }
   }
 
   async function caricaConsultaCarico() {
