@@ -330,6 +330,39 @@
     </div>
   </div>
 
+  <div id="modal-consulta-carico" class="modal-overlay" hidden>
+    <div class="modal modal-carico">
+      <h3>Consulta carico delle prossime settimane</h3>
+      <p class="subtitle">Capacità giornaliera, arretrati e articoli già previsti. Le lavorazioni esterne non contano nel carico interno.</p>
+      <p id="carico-arretrati-totale" class="subtitle-inline"></p>
+      <div class="field-doppio" style="flex:0 0 auto; gap:10px;">
+        <div class="field">
+          <label for="carico-da-data">Dal</label>
+          <input type="date" id="carico-da-data" />
+        </div>
+        <div class="field">
+          <label for="carico-a-data">Al</label>
+          <input type="date" id="carico-a-data" />
+        </div>
+        <button type="button" id="btn-aggiorna-carico" style="align-self:flex-end;">Aggiorna</button>
+      </div>
+      <div class="field checkbox-field" id="carico-applica-tutti-contenitore" hidden>
+        <label><input type="checkbox" id="carico-applica-tutti" /> Applica a tutti gli articoli di questa commessa (si potrà correggere dopo sulle eccezioni)</label>
+      </div>
+      <div class="panel">
+        <table>
+          <thead>
+            <tr><th>Data</th><th>Giorno</th><th>Esito</th><th>Carico</th><th></th></tr>
+          </thead>
+          <tbody id="corpo-tabella-carico"></tbody>
+        </table>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-chiudi-consulta-carico">Chiudi</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal-nuovo-articolo" class="modal-overlay" hidden>
     <div class="modal">
       <h3>Nuovo articolo</h3>
@@ -366,6 +399,7 @@
       <div class="field">
         <label for="articolo-scadenza">Data prevista di consegna</label>
         <input type="date" id="articolo-scadenza" />
+        <button type="button" id="btn-consulta-carico-nuovo-articolo" class="new-customer-toggle">Consulta carico delle prossime settimane</button>
       </div>
       <div class="field checkbox-field">
         <label><input type="checkbox" id="articolo-urgente" /> Urgente</label>

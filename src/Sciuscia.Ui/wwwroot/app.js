@@ -79,6 +79,7 @@
   let articoloDaEvidenziareId = null;
   let agendaCache = [];
   let anteprimaAgendaCorrente = null;
+  let consultaCaricoContesto = null;
 
   let clienteSelezionatoId = null;
   let ricercaInCorso = null;
@@ -795,12 +796,18 @@
     if (articolo.isUrgent) bollini.push('<span class="badge urgente">Urgente</span>');
     if (articolo.isPriority) bollini.push('<span class="badge priorita">Priorità</span>');
 
+    const testoScadenza = articolo.dueDate ? formattaDataItaliana(articolo.dueDate) : "Nessuna data prevista";
+
     scheda.innerHTML = `
       <div class="scheda-articolo-intestazione">
         <div>
           <strong>${escapeHtml(articolo.visibleCode)}</strong> — ${escapeHtml(dettaglioArticolo.categoryName)} / ${escapeHtml(dettaglioArticolo.brandName)}
           ${bollini.join(" ")}
           <div class="descrizione-articolo">${escapeHtml(articolo.description)}</div>
+          <div class="scadenza-articolo">
+            Consegna prevista: ${escapeHtml(testoScadenza)}
+            <button type="button" class="btn-modifica-scadenza">Modifica</button>
+          </div>
         </div>
         <div class="scheda-articolo-azioni">
           <select class="select-stato-articolo"></select>
@@ -812,6 +819,10 @@
       <div class="lista-lavorazioni"></div>
       <div class="lista-foto"></div>
     `;
+
+    scheda.querySelector(".btn-modifica-scadenza").addEventListener("click", () =>
+      apriConsultaCarico({ articoloEsistente: articolo, commessaId: commessaCorrenteId })
+    );
 
     const selectStato = scheda.querySelector(".select-stato-articolo");
     for (const codice of Object.keys(ETICHETTE_STATO)) {
@@ -2822,6 +2833,142 @@
     }
   });
   document.getElementById("btn-segna-pronto-agenda").addEventListener("click", segnaProntoDaAgenda);
+
+  // --- Consulta carico delle prossime settimane (specifica, sezione 3) ---
+
+  /// `contesto` è null quando la finestra è aperta dal modulo "Nuovo articolo" (la data scelta va
+  /// solo scritta nel campo, l'articolo non esiste ancora), oppure { articoloEsistente, commessaId }
+  /// quando è apribile dalla scheda di un articolo già creato (la data va salvata subito).
+  async function apriConsultaCarico(contesto) {
+    nascondiErrore();
+    consultaCaricoContesto = contesto || null;
+    document.getElementById("carico-applica-tutti-contenitore").hidden = !(contesto && contesto.commessaId);
+    document.getElementById("carico-applica-tutti").checked = false;
+
+    if (!document.getElementById("carico-da-data").value) {
+      const oggi = new Date();
+      const inSetteSettimane = new Date(oggi.getTime() + 48 * 24 * 60 * 60 * 1000);
+      document.getElementById("carico-da-data").value = formattaDataPerInput(oggi);
+      document.getElementById("carico-a-data").value = formattaDataPerInput(inSetteSettimane);
+    }
+
+    document.getElementById("modal-consulta-carico").hidden = false;
+    await caricaConsultaCarico();
+  }
+
+  function chiudiConsultaCarico() {
+    document.getElementById("modal-consulta-carico").hidden = true;
+    consultaCaricoContesto = null;
+  }
+
+  async function caricaConsultaCarico() {
+    const daData = document.getElementById("carico-da-data").value;
+    const aData = document.getElementById("carico-a-data").value;
+    const corpo = document.getElementById("corpo-tabella-carico");
+    corpo.innerHTML = "";
+    if (!daData || !aData) {
+      return;
+    }
+
+    nascondiErrore();
+    try {
+      const [articoli, giorniCalendario] = await Promise.all([
+        window.sciuscia.call("agenda.elenco"),
+        window.sciuscia.call("impostazioni.calendario", { daData, aData }),
+      ]);
+
+      const oggiTesto = formattaDataPerInput(new Date());
+      const arretrati = articoli.filter((a) => a.item.dueDate && a.item.dueDate < oggiTesto);
+      document.getElementById("carico-arretrati-totale").textContent =
+        arretrati.length > 0
+          ? `Arretrati (consegna già scaduta, articolo non ancora pronto): ${arretrati.length}`
+          : "Nessun arretrato al momento.";
+
+      const carichiPerGiorno = new Map();
+      for (const articolo of articoli) {
+        const data = articolo.item.dueDate;
+        if (!data) {
+          continue;
+        }
+        if (!carichiPerGiorno.has(data)) {
+          carichiPerGiorno.set(data, { totale: 0, urgenti: 0, prioritari: 0 });
+        }
+        const voce = carichiPerGiorno.get(data);
+        voce.totale += 1;
+        if (articolo.item.isUrgent) voce.urgenti += 1;
+        if (articolo.item.isPriority) voce.prioritari += 1;
+      }
+
+      for (const giorno of giorniCalendario || []) {
+        corpo.appendChild(costruisciRigaCarico(giorno, carichiPerGiorno.get(giorno.date)));
+      }
+    } catch (errore) {
+      mostraErrore("Non è stato possibile consultare il carico: " + errore.message);
+    }
+  }
+
+  function costruisciRigaCarico(giorno, carico) {
+    const riga = document.createElement("tr");
+    if (giorno.capacityFactor === 0) {
+      riga.classList.add("riga-carico-chiuso");
+    }
+
+    const titoloGiorno = NOMI_GIORNI_SETTIMANA[new Date(giorno.date + "T00:00:00").getDay()];
+    const esitoTesto = giorno.capacityFactor === 1 ? "Lavorativo" : giorno.capacityFactor === 0.5 ? "Mezza giornata" : "Chiuso";
+    const notaEsito = giorno.capacityFactor < 1 ? ` — ${escapeHtml(giorno.reason)}` : "";
+    const caricoTesto = carico
+      ? `${carico.totale} previst${carico.totale === 1 ? "o" : "i"}`
+        + (carico.urgenti > 0 ? `, ${carico.urgenti} urgent${carico.urgenti === 1 ? "e" : "i"}` : "")
+        + (carico.prioritari > 0 ? `, ${carico.prioritari} con priorità` : "")
+      : "Nessuno";
+
+    riga.innerHTML = `
+      <td>${escapeHtml(formattaDataItaliana(giorno.date))}</td>
+      <td>${escapeHtml(titoloGiorno)}</td>
+      <td>${escapeHtml(esitoTesto)}${notaEsito}</td>
+      <td>${escapeHtml(caricoTesto)}</td>
+      <td class="azioni-riga"><button type="button" class="btn-scegli-data-carico">Scegli questa data</button></td>
+    `;
+    riga.querySelector(".btn-scegli-data-carico").addEventListener("click", () => scegliDataCarico(giorno));
+    return riga;
+  }
+
+  async function scegliDataCarico(giorno) {
+    if (giorno.capacityFactor === 0 && !window.confirm(`Questo giorno è chiuso (${giorno.reason}). Usare comunque questa data?`)) {
+      return;
+    }
+
+    if (!consultaCaricoContesto || !consultaCaricoContesto.articoloEsistente) {
+      document.getElementById("articolo-scadenza").value = giorno.date;
+      chiudiConsultaCarico();
+      return;
+    }
+
+    nascondiErrore();
+    const applicaATutti = document.getElementById("carico-applica-tutti").checked && !!consultaCaricoContesto.commessaId;
+    try {
+      if (applicaATutti) {
+        await window.sciuscia.call("commesse.impostaScadenzaTutti", {
+          commessaId: consultaCaricoContesto.commessaId,
+          scadenza: giorno.date,
+        });
+      } else {
+        await window.sciuscia.call("articoli.impostaScadenza", {
+          articoloId: consultaCaricoContesto.articoloEsistente.itemId,
+          scadenza: giorno.date,
+          rowVersion: consultaCaricoContesto.articoloEsistente.rowVersion,
+        });
+      }
+      chiudiConsultaCarico();
+      await ricaricaDettaglioCommessa();
+    } catch (errore) {
+      mostraErrore("Non è stato possibile impostare la data: " + errore.message);
+    }
+  }
+
+  document.getElementById("btn-consulta-carico-nuovo-articolo").addEventListener("click", () => apriConsultaCarico(null));
+  document.getElementById("btn-aggiorna-carico").addEventListener("click", caricaConsultaCarico);
+  document.getElementById("btn-chiudi-consulta-carico").addEventListener("click", chiudiConsultaCarico);
 
   caricaCommesse();
 })();

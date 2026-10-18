@@ -84,6 +84,8 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                 "articoli.impostaCostoLavorazione" => await ImpostaCostoLavorazioneAsync(request.Payload),
                 "articoli.annullaLavorazione" => await AnnullaLavorazioneAsync(request.Payload),
                 "articoli.cambiaStato" => await CambiaStatoArticoloAsync(request.Payload),
+                "articoli.impostaScadenza" => await ImpostaScadenzaArticoloAsync(request.Payload),
+                "commesse.impostaScadenzaTutti" => await ImpostaScadenzaTuttiAsync(request.Payload),
                 "articoli.aggiungiFoto" => await AggiungiFotoAsync(request.Payload),
                 "articoli.eliminaFoto" => await EliminaFotoAsync(request.Payload),
                 "operazioni.registraPagamento" => await RegistraPagamentoAsync(request.Payload),
@@ -510,6 +512,42 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         await runtime.Orders.Items.SetWorkflowStatusAsync(itemId, nuovoStato, rowVersion);
         return await runtime.Orders.Items.FindAsync(itemId)
             ?? throw new InvalidOperationException("Articolo non trovato dopo l'aggiornamento.");
+    }
+
+    /// <summary>Riporta sull'articolo la data scelta nella finestra "Consulta carico delle prossime settimane" (specifica, sezione 3).</summary>
+    private async Task<ItemRecord> ImpostaScadenzaArticoloAsync(JsonElement payload)
+    {
+        var itemId = RequireString(payload, "articoloId");
+        var scadenza = OptionalString(payload, "scadenza");
+        var rowVersion = RequireInt(payload, "rowVersion");
+        await runtime.Orders.Items.SetDueDateAsync(itemId, scadenza, rowVersion);
+        return await runtime.Orders.Items.FindAsync(itemId)
+            ?? throw new InvalidOperationException("Articolo non trovato dopo l'aggiornamento.");
+    }
+
+    /// <summary>
+    /// Applica la stessa data a tutti gli articoli non annullati della commessa in un colpo
+    /// (specifica: "la data può essere applicata a tutti gli articoli e poi corretta sulle
+    /// eccezioni"). Ogni articolo resta comunque correggibile singolarmente dopo.
+    /// </summary>
+    private async Task<object> ImpostaScadenzaTuttiAsync(JsonElement payload)
+    {
+        var orderId = RequireString(payload, "commessaId");
+        var scadenza = OptionalString(payload, "scadenza");
+        var articoli = await runtime.Orders.Items.ListByOrderAsync(orderId);
+        var aggiornati = 0;
+        foreach (var articolo in articoli)
+        {
+            if (articolo.WorkflowStatus == "ANNULLATO")
+            {
+                continue;
+            }
+
+            await runtime.Orders.Items.SetDueDateAsync(articolo.ItemId, scadenza, articolo.RowVersion);
+            aggiornati++;
+        }
+
+        return new { ok = true, aggiornati };
     }
 
     /// <summary>

@@ -867,3 +867,31 @@ button.pericoloso:hover {
   font-size: 13px;
   margin: 10px 0;
 }
+
+/* --- Consulta carico delle prossime settimane --- */
+
+.modal-carico {
+  width: 640px;
+}
+
+.scadenza-articolo {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scadenza-articolo .btn-modifica-scadenza {
+  padding: 3px 9px;
+  font-size: 12px;
+}
+
+.riga-carico-arretrato td {
+  background: var(--danger-bg);
+}
+
+.riga-carico-chiuso td {
+  color: var(--text-muted);
+}
