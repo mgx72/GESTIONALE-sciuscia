@@ -150,7 +150,10 @@ public sealed class ItemWorkService(AppPaths paths, SemaphoreSlim maintenanceGat
     /// Imposta (o corregge) il prezzo di una lavorazione già applicata alla commessa — serve sia
     /// per decidere il prezzo di una lavorazione "da definire" dopo un preventivo accettato dal
     /// cliente, sia per correggere un prezzo già impostato (resta modificabile nel contesto della
-    /// commessa, come previsto dalla specifica).
+    /// commessa, come previsto dalla specifica). Impostare il prezzo vale anche come conferma del
+    /// preventivo (approval_status torna/diventa APPROVATA): è l'unico momento in cui Mariagrazia
+    /// sa quanto far pagare, quindi lo decide solo dopo che il cliente ha accettato — anche se la
+    /// lavorazione era stata segnata come rifiutata per errore, correggere il prezzo la riammette.
     /// </summary>
     public async Task SetPriceAsync(string itemWorkId, int priceCents, int expectedRowVersion, CancellationToken cancellationToken = default)
     {
@@ -167,7 +170,7 @@ public sealed class ItemWorkService(AppPaths paths, SemaphoreSlim maintenanceGat
             command.CommandText =
                 """
                 UPDATE item_works
-                   SET price_cents = $price, price_status = 'DEFINITO',
+                   SET price_cents = $price, price_status = 'DEFINITO', approval_status = 'APPROVATA',
                        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), row_version = row_version + 1
                  WHERE item_work_id = $id AND row_version = $expected;
                 """;

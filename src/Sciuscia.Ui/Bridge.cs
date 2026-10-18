@@ -83,6 +83,7 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                 "articoli.impostaPrezzoLavorazione" => await ImpostaPrezzoLavorazioneAsync(request.Payload),
                 "articoli.impostaCostoLavorazione" => await ImpostaCostoLavorazioneAsync(request.Payload),
                 "articoli.annullaLavorazione" => await AnnullaLavorazioneAsync(request.Payload),
+                "articoli.rifiutaLavorazione" => await RifiutaLavorazioneAsync(request.Payload),
                 "articoli.cambiaStato" => await CambiaStatoArticoloAsync(request.Payload),
                 "articoli.impostaScadenza" => await ImpostaScadenzaArticoloAsync(request.Payload),
                 "commesse.impostaScadenzaTutti" => await ImpostaScadenzaTuttiAsync(request.Payload),
@@ -470,8 +471,13 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
             assignmentId = assignment.ExternalAssignmentId;
         }
 
+        // Una lavorazione senza prezzo resta in attesa di risposta del cliente al preventivo
+        // (approval_status PENDENTE): la conferma arriva impostando il prezzo (ImpostaPrezzoLavorazioneAsync),
+        // il rifiuto con RifiutaLavorazioneAsync. Una lavorazione già prezzata nasce invece approvata, come prima.
+        var approvazioneIniziale = prezzoCents.HasValue ? "APPROVATA" : "PENDENTE";
+
         return await runtime.Orders.ItemWorks.AddAsync(
-            itemId, workTypeId, nome, testoEtichetta, fascia, prezzoCents, costoCents, esecuzione, assignmentId);
+            itemId, workTypeId, nome, testoEtichetta, fascia, prezzoCents, costoCents, esecuzione, assignmentId, approvazioneIniziale);
     }
 
     /// <summary>Decide (o corregge) il prezzo di una lavorazione già applicata, es. dopo che il cliente accetta un preventivo.</summary>
@@ -501,6 +507,19 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         var motivo = RequireString(payload, "motivo");
         var rowVersion = RequireInt(payload, "rowVersion");
         await runtime.Orders.ItemWorks.CancelAsync(lavorazioneId, motivo, rowVersion);
+        return new { ok = true };
+    }
+
+    /// <summary>
+    /// Segna come rifiutata dal cliente una lavorazione ancora senza prezzo (risposta a un preventivo
+    /// inviato): resta senza prezzo, ma esce dall'elenco di quelle ancora in attesa di risposta e non
+    /// entra più nel totale della commessa (vedi v_order_financials).
+    /// </summary>
+    private async Task<object> RifiutaLavorazioneAsync(JsonElement payload)
+    {
+        var lavorazioneId = RequireString(payload, "lavorazioneId");
+        var rowVersion = RequireInt(payload, "rowVersion");
+        await runtime.Orders.ItemWorks.RejectAsync(lavorazioneId, rowVersion);
         return new { ok = true };
     }
 

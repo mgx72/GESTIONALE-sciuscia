@@ -502,6 +502,38 @@ button.pericoloso:hover {
   padding: 4px 10px;
 }
 
+.riga-lavorazione .btn-rifiuta-lavorazione {
+  font-size: 12px;
+  padding: 4px 10px;
+  margin-left: 6px;
+}
+
+.riga-lavorazione .badge-da-preventivare {
+  color: #e3b341;
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.riga-lavorazione.lavorazione-rifiutata {
+  opacity: 0.6;
+}
+
+.riga-lavorazione.lavorazione-rifiutata .nome-lavorazione {
+  text-decoration: line-through;
+}
+
+.riga-lavorazione .badge-rifiutata {
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.scheda-articolo-azioni .btn-invia-preventivo {
+  color: #e3b341;
+  border-color: #e3b341;
+}
+
 /* --- Fotografie --- */
 
 .lista-foto {

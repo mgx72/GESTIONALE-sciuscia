@@ -561,19 +561,60 @@
     }
   }
 
-  function testoMessaggioPredefinito(scopo, dettaglio) {
+  /// Lavorazioni di un articolo ancora senza prezzo, in attesa di risposta del cliente al
+  /// preventivo (non rifiutate, non annullate): sono quelle che un messaggio di tipo PREVENTIVO
+  /// deve elencare, invece del totale già definito della commessa.
+  function lavorazioniDaPreventivare(dettaglioArticolo) {
+    return dettaglioArticolo.works.filter(
+      (dl) => dl.work.priceStatus === "DA_DEFINIRE" && dl.work.approvalStatus !== "RIFIUTATA" && dl.work.canceledAt == null
+    );
+  }
+
+  function testoMessaggioPredefinito(scopo, dettaglio, articoliSelezionatiId) {
     const codice = dettaglio.order.visibleCode;
+    const articoliSelezionati = (articoliSelezionatiId || [])
+      .map((id) => dettaglio.items.find((da) => da.item.itemId === id))
+      .filter((da) => da != null);
+
     switch (scopo) {
       case "AVVISO_PRONTO":
+        if (articoliSelezionati.length === 1) {
+          return "Gentile cliente, il suo articolo (" + articoliSelezionati[0].categoryName + ", commessa " + codice +
+            ") è pronto per il ritiro. Grazie!";
+        }
         return "Gentile cliente, il suo articolo (commessa " + codice + ") è pronto per il ritiro. Grazie!";
-      case "PREVENTIVO":
+      case "PREVENTIVO": {
+        const voci = [];
+        for (const dettaglioArticolo of articoliSelezionati) {
+          for (const dl of lavorazioniDaPreventivare(dettaglioArticolo)) {
+            voci.push(dettaglioArticolo.categoryName + " — " + dl.work.appliedLabelText);
+          }
+        }
+        if (voci.length > 0) {
+          return "Gentile cliente, per la commessa " + codice + " dobbiamo ancora definire il prezzo per: " +
+            voci.join("; ") + ". Ci faccia sapere come procedere, grazie.";
+        }
         return "Gentile cliente, il preventivo per la commessa " + codice + " è di " +
           formattaEuro(dettaglio.financials.totalCents) + ". Fateci sapere se possiamo procedere.";
+      }
       case "SOLLECITO":
         return "Gentile cliente, le ricordiamo che i suoi capi sono pronti per il ritiro.";
       default:
         return "";
     }
+  }
+
+  function articoliSelezionatiMessaggio() {
+    return Array.from(document.querySelectorAll("#messaggio-lista-articoli input[type=checkbox]:checked")).map((c) => c.value);
+  }
+
+  function aggiornaTestoMessaggioDaSelezione() {
+    if (!dettaglioCorrente) {
+      return;
+    }
+    const scopo = document.getElementById("messaggio-scopo").value;
+    document.getElementById("messaggio-testo").value =
+      testoMessaggioPredefinito(scopo, dettaglioCorrente, articoliSelezionatiMessaggio());
   }
 
   function aggiornaBottoneApriMessaggioEsterno() {
@@ -596,14 +637,13 @@
     aggiornaBottoneApriMessaggioEsterno();
   }
 
-  function apriModaleMessaggio() {
+  function apriModaleMessaggio(scopoIniziale, articoliPreselezionatiId) {
     if (!dettaglioCorrente) {
       return;
     }
     document.getElementById("messaggio-commessa-codice").textContent = "Commessa " + dettaglioCorrente.order.visibleCode;
     document.getElementById("messaggio-tipo").value = "WHATSAPP";
-    document.getElementById("messaggio-scopo").value = "AVVISO_PRONTO";
-    document.getElementById("messaggio-testo").value = testoMessaggioPredefinito("AVVISO_PRONTO", dettaglioCorrente);
+    document.getElementById("messaggio-scopo").value = scopoIniziale || "AVVISO_PRONTO";
     document.getElementById("messaggio-destinatario").value = "";
     aggiornaDestinatarioMessaggio();
 
@@ -615,6 +655,9 @@
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.value = dettaglioArticolo.item.itemId;
+      if (articoliPreselezionatiId && articoliPreselezionatiId.includes(dettaglioArticolo.item.itemId)) {
+        checkbox.checked = true;
+      }
       etichetta.appendChild(checkbox);
       etichetta.appendChild(document.createTextNode(
         " " + dettaglioArticolo.item.visibleCode + " — " + dettaglioArticolo.categoryName + " — " + dettaglioArticolo.item.description
@@ -622,6 +665,7 @@
       lista.appendChild(etichetta);
     }
 
+    aggiornaTestoMessaggioDaSelezione();
     modaleMessaggio.hidden = false;
   }
 
@@ -797,6 +841,7 @@
     if (articolo.isPriority) bollini.push('<span class="badge priorita">Priorità</span>');
 
     const testoScadenza = articolo.dueDate ? formattaDataItaliana(articolo.dueDate) : "Nessuna data prevista";
+    const haLavorazioniDaPreventivare = lavorazioniDaPreventivare(dettaglioArticolo).length > 0;
 
     scheda.innerHTML = `
       <div class="scheda-articolo-intestazione">
@@ -814,6 +859,7 @@
           <button type="button" class="btn-aggiungi-lavorazione">+ Lavorazione</button>
           <button type="button" class="btn-aggiungi-foto">+ Foto</button>
           <button type="button" class="btn-aggiungi-etichetta">Stampa etichetta</button>
+          ${haLavorazioniDaPreventivare ? '<button type="button" class="btn-invia-preventivo">Invia preventivo</button>' : ""}
         </div>
       </div>
       <div class="lista-lavorazioni"></div>
@@ -823,6 +869,10 @@
     scheda.querySelector(".btn-modifica-scadenza").addEventListener("click", () =>
       apriConsultaCarico({ articoloEsistente: articolo, commessaId: commessaCorrenteId })
     );
+    const bottonePreventivo = scheda.querySelector(".btn-invia-preventivo");
+    if (bottonePreventivo) {
+      bottonePreventivo.addEventListener("click", () => apriPreventivoPerArticolo(articolo.itemId));
+    }
 
     const selectStato = scheda.querySelector(".select-stato-articolo");
     for (const codice of Object.keys(ETICHETTE_STATO)) {
@@ -941,7 +991,9 @@
     const lavorazione = dettaglioLavorazione.work;
     const riga = document.createElement("div");
     const annullata = lavorazione.canceledAt != null;
-    riga.className = "riga-lavorazione" + (annullata ? " lavorazione-annullata" : "");
+    const rifiutata = !annullata && lavorazione.approvalStatus === "RIFIUTATA";
+    const daPreventivare = !annullata && !rifiutata && lavorazione.priceStatus === "DA_DEFINIRE";
+    riga.className = "riga-lavorazione" + (annullata ? " lavorazione-annullata" : "") + (rifiutata ? " lavorazione-rifiutata" : "");
 
     const prezzoTesto = lavorazione.priceStatus === "DEFINITO" ? formattaEuro(lavorazione.priceCents) : "Prezzo da definire";
     const esecuzioneTesto = lavorazione.executionType === "ESTERNA"
@@ -952,18 +1004,41 @@
       <span class="nome-lavorazione">${escapeHtml(lavorazione.appliedName)}</span>
       <span class="esecuzione-lavorazione">${esecuzioneTesto}</span>
       <span class="prezzo-lavorazione">${prezzoTesto}</span>
+      ${daPreventivare ? '<span class="badge-da-preventivare">Da preventivare</span>' : ""}
       ${annullata
         ? `<span class="badge-annullata" title="${escapeHtml(lavorazione.cancellationReason || "")}">Annullata</span>`
-        : '<button type="button" class="btn-modifica-lavorazione">Modifica</button>'}
+        : rifiutata
+          ? '<span class="badge-rifiutata">Preventivo rifiutato</span>'
+          : `<button type="button" class="btn-modifica-lavorazione">Modifica</button>
+             ${daPreventivare ? '<button type="button" class="btn-rifiuta-lavorazione">Rifiuta</button>' : ""}`}
     `;
 
-    if (!annullata) {
+    if (!annullata && !rifiutata) {
       riga.querySelector(".btn-modifica-lavorazione").addEventListener("click", () =>
         apriModaleModificaLavorazione(dettaglioLavorazione)
       );
+      const bottoneRifiuta = riga.querySelector(".btn-rifiuta-lavorazione");
+      if (bottoneRifiuta) {
+        bottoneRifiuta.addEventListener("click", () => rifiutaLavorazione(lavorazione.itemWorkId, lavorazione.rowVersion));
+      }
     }
 
     return riga;
+  }
+
+  /// Segna una lavorazione ancora senza prezzo come rifiutata dal cliente dopo il preventivo:
+  /// resta nello storico senza prezzo, esce dal totale della commessa e da quelle ancora in attesa.
+  async function rifiutaLavorazione(lavorazioneId, rowVersion) {
+    if (!window.confirm("Segnare questa lavorazione come rifiutata dal cliente? Resterà senza prezzo e non entrerà nel totale della commessa.")) {
+      return;
+    }
+    nascondiErrore();
+    try {
+      await window.sciuscia.call("articoli.rifiutaLavorazione", { lavorazioneId, rowVersion });
+      await ricaricaDettaglioCommessa();
+    } catch (errore) {
+      mostraErrore("Operazione non riuscita: " + errore.message);
+    }
   }
 
   function apriModaleModificaLavorazione(dettaglioLavorazione) {
@@ -1067,15 +1142,16 @@
 
   /// Apre la finestra "Prepara messaggio" già pronta per avvisare un singolo articolo appena
   /// segnato pronto, con solo quell'articolo selezionato nell'elenco (l'operatore può comunque
-  /// aggiungerne altri prima di salvare).
+  /// aggiungerne altri prima di salvare). Il testo cita già la categoria, così il cliente capisce
+  /// che riguarda quel singolo articolo e non l'intera commessa.
   function apriModaleMessaggioPerArticolo(itemId) {
-    apriModaleMessaggio();
-    const checkbox = document.querySelector(`#messaggio-lista-articoli input[value="${itemId}"]`);
-    if (checkbox) {
-      document.querySelectorAll("#messaggio-lista-articoli input[type=checkbox]").forEach((c) => {
-        c.checked = c === checkbox;
-      });
-    }
+    apriModaleMessaggio("AVVISO_PRONTO", [itemId]);
+  }
+
+  /// Apre la finestra "Prepara messaggio" già pronta per inviare il preventivo delle lavorazioni
+  /// ancora senza prezzo di un articolo, con solo quell'articolo selezionato.
+  function apriPreventivoPerArticolo(itemId) {
+    apriModaleMessaggio("PREVENTIVO", [itemId]);
   }
 
   // --- Nuovo articolo ---
@@ -1590,20 +1666,18 @@
   document.getElementById("btn-annulla-ritiro").addEventListener("click", chiudiModaleRitiro);
   document.getElementById("btn-salva-ritiro").addEventListener("click", salvaRitiro);
 
-  document.getElementById("btn-nuovo-messaggio").addEventListener("click", apriModaleMessaggio);
+  document.getElementById("btn-nuovo-messaggio").addEventListener("click", () => apriModaleMessaggio());
   document.getElementById("btn-annulla-messaggio").addEventListener("click", chiudiModaleMessaggio);
   document.getElementById("btn-salva-messaggio").addEventListener("click", salvaMessaggio);
   document.getElementById("btn-apri-messaggio-esterno").addEventListener("click", apriMessaggioEsterno);
   document.getElementById("messaggio-tipo").addEventListener("change", aggiornaDestinatarioMessaggio);
-  document.getElementById("messaggio-scopo").addEventListener("change", (evento) => {
-    if (dettaglioCorrente) {
-      document.getElementById("messaggio-testo").value = testoMessaggioPredefinito(evento.target.value, dettaglioCorrente);
-    }
-  });
+  document.getElementById("messaggio-scopo").addEventListener("change", aggiornaTestoMessaggioDaSelezione);
+  document.getElementById("messaggio-lista-articoli").addEventListener("change", aggiornaTestoMessaggioDaSelezione);
   document.getElementById("messaggio-seleziona-tutti").addEventListener("change", (evento) => {
     document.querySelectorAll("#messaggio-lista-articoli input[type=checkbox]").forEach((casella) => {
       casella.checked = evento.target.checked;
     });
+    aggiornaTestoMessaggioDaSelezione();
   });
 
   document.getElementById("btn-stampa-ricevuta").addEventListener("click", () => {
