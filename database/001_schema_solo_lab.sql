@@ -47,6 +47,10 @@ CREATE TABLE installation_settings (
     backup_root         TEXT NOT NULL,
     automatic_backup_at TEXT NOT NULL DEFAULT '14:00' CHECK (automatic_backup_at GLOB '[0-2][0-9]:[0-5][0-9]'),
     locale              TEXT NOT NULL DEFAULT 'it-IT',
+    -- Capacità di lavoro interna di una giornata intera (minuti), usata per confrontare il
+    -- carico previsto (somma dei tempi delle lavorazioni) con quanto è realisticamente
+    -- gestibile. Le mezze giornate dimezzano questo valore (vedi WorkCalendarService).
+    daily_capacity_minutes INTEGER NOT NULL DEFAULT 480 CHECK (daily_capacity_minutes > 0),
     updated_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     row_version         INTEGER NOT NULL DEFAULT 1 CHECK (row_version >= 1)
 ) STRICT;
@@ -154,6 +158,9 @@ CREATE TABLE work_types (
                         CHECK (price_mode IN ('FISSO','FASCE','DA_DEFINIRE')),
     standard_price_cents INTEGER CHECK (standard_price_cents IS NULL OR standard_price_cents >= 0),
     standard_cost_cents INTEGER CHECK (standard_cost_cents IS NULL OR standard_cost_cents >= 0),
+    -- Tempo stimato per completare la lavorazione (minuti), usato per calcolare il carico
+    -- giornaliero in Agenda lavori/Consulta carico. Assente per le lavorazioni a testo libero.
+    default_duration_minutes INTEGER CHECK (default_duration_minutes IS NULL OR default_duration_minutes > 0),
     sort_order          INTEGER NOT NULL DEFAULT 0,
     active              INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
     created_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
@@ -597,6 +604,7 @@ CREATE TRIGGER tr_history_events_no_delete BEFORE DELETE ON history_events
 BEGIN SELECT RAISE(ABORT, 'La cronologia non può essere eliminata'); END;
 
 INSERT INTO schema_migrations(version, name) VALUES (1, 'schema_solo_lab_iniziale');
+INSERT INTO schema_migrations(version, name) VALUES (2, 'tempo_lavorazioni_e_capacita_giornaliera');
 
 COMMIT;
 

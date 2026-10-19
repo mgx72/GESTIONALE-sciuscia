@@ -30,6 +30,7 @@ public sealed class DatabaseInitializer(
             }
 
             await VerifyIntegrityAsync(connection, cancellationToken);
+            await ApplyPendingMigrationsAsync(connection, cancellationToken);
             return await ReadInstallationAsync(connection, cancellationToken);
         }
         finally
@@ -110,6 +111,68 @@ public sealed class DatabaseInitializer(
         {
             throw new InvalidDataException("Il database contiene collegamenti non validi.");
         }
+    }
+
+    /// <summary>
+    /// Porta avanti il database di un'installazione già esistente alla versione di schema più
+    /// recente, applicando soltanto le migrazioni non ancora eseguite (confrontando con
+    /// schema_migrations). Un'installazione nuova parte già alla versione più recente tramite
+    /// lo schema incorporato, quindi questo metodo per lei non fa nulla. Ogni migrazione è
+    /// additiva (nuove colonne, mai eliminazioni) e viene applicata in un'unica transazione
+    /// insieme alla sua riga di registrazione, così non resta mai a metà.
+    /// </summary>
+    private static async Task ApplyPendingMigrationsAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        var currentVersion = await GetCurrentSchemaVersionAsync(connection, cancellationToken);
+
+        if (currentVersion < 2)
+        {
+            await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                await ExecuteMigrationStepAsync(
+                    connection, transaction,
+                    "ALTER TABLE work_types ADD COLUMN default_duration_minutes INTEGER CHECK (default_duration_minutes IS NULL OR default_duration_minutes > 0);",
+                    cancellationToken);
+
+                await ExecuteMigrationStepAsync(
+                    connection, transaction,
+                    "ALTER TABLE installation_settings ADD COLUMN daily_capacity_minutes INTEGER NOT NULL DEFAULT 480 CHECK (daily_capacity_minutes > 0);",
+                    cancellationToken);
+
+                await ExecuteMigrationStepAsync(
+                    connection, transaction,
+                    "INSERT INTO schema_migrations(version, name) VALUES (2, 'tempo_lavorazioni_e_capacita_giornaliera');",
+                    cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+    }
+
+    private static async Task<int> GetCurrentSchemaVersionAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COALESCE(MAX(version), 0) FROM schema_migrations;";
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return Convert.ToInt32(result);
+    }
+
+    private static async Task ExecuteMigrationStepAsync(
+        SqliteConnection connection,
+        System.Data.Common.DbTransaction transaction,
+        string sql,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = (SqliteTransaction)transaction;
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private async Task<InstallationState> SeedInstallationAsync(

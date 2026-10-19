@@ -67,6 +67,8 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                 "impostazioni.creaChiusuraCalendario" => await CreaChiusuraCalendarioAsync(request.Payload),
                 "impostazioni.creaAperturaCalendario" => await CreaAperturaCalendarioAsync(request.Payload),
                 "impostazioni.eliminaEccezioneCalendario" => await EliminaEccezioneCalendarioAsync(request.Payload),
+                "impostazioni.leggiCapacitaGiornaliera" => await LeggiCapacitaGiornalieraAsync(),
+                "impostazioni.impostaCapacitaGiornaliera" => await ImpostaCapacitaGiornalieraAsync(request.Payload),
                 "agenda.elenco" => await AgendaElencoAsync(),
                 "home.riepilogo" => await runtime.Orders.Home.GetRiepilogoAsync(),
                 "anagrafiche.artigiani" => await runtime.Registry.Artisans.ListAsync(OptionalBool(request.Payload, "includiInattive") ?? false),
@@ -390,7 +392,8 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         var modalitaPrezzo = OptionalString(payload, "modalitaPrezzo") ?? "DA_DEFINIRE";
         var prezzoStandardCents = OptionalInt(payload, "prezzoStandardCents");
         var costoStandardCents = OptionalInt(payload, "costoStandardCents");
-        return await runtime.Registry.WorkTypes.CreateAsync(nome, testoEtichetta, esecuzione, modalitaPrezzo, prezzoStandardCents, costoStandardCents);
+        var tempoRealizzoMinuti = OptionalInt(payload, "tempoRealizzoMinuti");
+        return await runtime.Registry.WorkTypes.CreateAsync(nome, testoEtichetta, esecuzione, modalitaPrezzo, prezzoStandardCents, costoStandardCents, tempoRealizzoMinuti);
     }
 
     private async Task<WorkTypeRecord> ModificaLavorazioneListinoAsync(JsonElement payload)
@@ -402,8 +405,9 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         var modalitaPrezzo = OptionalString(payload, "modalitaPrezzo") ?? "DA_DEFINIRE";
         var prezzoStandardCents = OptionalInt(payload, "prezzoStandardCents");
         var costoStandardCents = OptionalInt(payload, "costoStandardCents");
+        var tempoRealizzoMinuti = OptionalInt(payload, "tempoRealizzoMinuti");
         var rowVersion = RequireInt(payload, "rowVersion");
-        await runtime.Registry.WorkTypes.UpdateAsync(lavorazioneId, nome, testoEtichetta, esecuzione, modalitaPrezzo, prezzoStandardCents, costoStandardCents, rowVersion);
+        await runtime.Registry.WorkTypes.UpdateAsync(lavorazioneId, nome, testoEtichetta, esecuzione, modalitaPrezzo, prezzoStandardCents, costoStandardCents, tempoRealizzoMinuti, rowVersion);
         var listino = await runtime.Registry.WorkTypes.ListAsync(includeInactive: true);
         return listino.First(w => w.WorkTypeId == lavorazioneId);
     }
@@ -662,6 +666,19 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         var eccezioneId = RequireString(payload, "eccezioneId");
         await runtime.Calendar.DeleteExceptionAsync(eccezioneId);
         return new { ok = true };
+    }
+
+    private async Task<object> LeggiCapacitaGiornalieraAsync()
+    {
+        var minuti = await runtime.Capacity.GetDailyCapacityMinutesAsync();
+        return new { capacitaGiornalieraMinuti = minuti };
+    }
+
+    private async Task<object> ImpostaCapacitaGiornalieraAsync(JsonElement payload)
+    {
+        var minuti = RequireInt(payload, "capacitaGiornalieraMinuti");
+        await runtime.Capacity.SetDailyCapacityMinutesAsync(minuti);
+        return new { capacitaGiornalieraMinuti = minuti };
     }
 
     private async Task<object> EliminaFotoAsync(JsonElement payload)

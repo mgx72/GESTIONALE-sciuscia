@@ -11,6 +11,7 @@ public sealed record WorkTypeRecord(
     string PriceMode,
     int? StandardPriceCents,
     int? StandardCostCents,
+    int? DefaultDurationMinutes,
     bool Active,
     int RowVersion);
 
@@ -30,6 +31,7 @@ public sealed class WorkTypeService(AppPaths paths, SemaphoreSlim maintenanceGat
         string priceMode,
         int? standardPriceCents,
         int? standardCostCents,
+        int? defaultDurationMinutes,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -52,6 +54,11 @@ public sealed class WorkTypeService(AppPaths paths, SemaphoreSlim maintenanceGat
             throw new ArgumentOutOfRangeException(nameof(priceMode), "Valori ammessi: FISSO, FASCE, DA_DEFINIRE.");
         }
 
+        if (defaultDurationMinutes is <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(defaultDurationMinutes), "Il tempo di realizzo deve essere maggiore di zero.");
+        }
+
         await maintenanceGate.WaitAsync(cancellationToken);
         try
         {
@@ -62,8 +69,8 @@ public sealed class WorkTypeService(AppPaths paths, SemaphoreSlim maintenanceGat
                 await using var insert = connection.CreateCommand();
                 insert.CommandText =
                     """
-                    INSERT INTO work_types(work_type_id, name, label_text, execution_default, price_mode, standard_price_cents, standard_cost_cents)
-                    VALUES ($id, $name, $labelText, $executionDefault, $priceMode, $standardPrice, $standardCost);
+                    INSERT INTO work_types(work_type_id, name, label_text, execution_default, price_mode, standard_price_cents, standard_cost_cents, default_duration_minutes)
+                    VALUES ($id, $name, $labelText, $executionDefault, $priceMode, $standardPrice, $standardCost, $defaultDuration);
                     """;
                 insert.Parameters.AddWithValue("$id", workTypeId);
                 insert.Parameters.AddWithValue("$name", name.Trim());
@@ -72,6 +79,7 @@ public sealed class WorkTypeService(AppPaths paths, SemaphoreSlim maintenanceGat
                 insert.Parameters.AddWithValue("$priceMode", priceMode);
                 insert.Parameters.AddWithValue("$standardPrice", (object?)standardPriceCents ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$standardCost", (object?)standardCostCents ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$defaultDuration", (object?)defaultDurationMinutes ?? DBNull.Value);
                 await insert.ExecuteNonQueryAsync(cancellationToken);
             }
             catch (SqliteException exception) when (exception.SqliteErrorCode == 19)
@@ -79,7 +87,7 @@ public sealed class WorkTypeService(AppPaths paths, SemaphoreSlim maintenanceGat
                 throw new InvalidOperationException($"Esiste già una lavorazione chiamata «{name.Trim()}».", exception);
             }
 
-            return new WorkTypeRecord(workTypeId, name.Trim(), labelText.Trim(), executionDefault, priceMode, standardPriceCents, standardCostCents, true, 1);
+            return new WorkTypeRecord(workTypeId, name.Trim(), labelText.Trim(), executionDefault, priceMode, standardPriceCents, standardCostCents, defaultDurationMinutes, true, 1);
         }
         finally
         {
@@ -95,6 +103,7 @@ public sealed class WorkTypeService(AppPaths paths, SemaphoreSlim maintenanceGat
         string priceMode,
         int? standardPriceCents,
         int? standardCostCents,
+        int? defaultDurationMinutes,
         int expectedRowVersion,
         CancellationToken cancellationToken = default)
     {
@@ -118,6 +127,11 @@ public sealed class WorkTypeService(AppPaths paths, SemaphoreSlim maintenanceGat
             throw new ArgumentOutOfRangeException(nameof(priceMode), "Valori ammessi: FISSO, FASCE, DA_DEFINIRE.");
         }
 
+        if (defaultDurationMinutes is <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(defaultDurationMinutes), "Il tempo di realizzo deve essere maggiore di zero.");
+        }
+
         await maintenanceGate.WaitAsync(cancellationToken);
         try
         {
@@ -130,6 +144,7 @@ public sealed class WorkTypeService(AppPaths paths, SemaphoreSlim maintenanceGat
                     UPDATE work_types
                        SET name = $name, label_text = $labelText, execution_default = $executionDefault,
                            price_mode = $priceMode, standard_price_cents = $standardPrice, standard_cost_cents = $standardCost,
+                           default_duration_minutes = $defaultDuration,
                            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), row_version = row_version + 1
                      WHERE work_type_id = $id AND row_version = $expected;
                     """;
@@ -140,6 +155,7 @@ public sealed class WorkTypeService(AppPaths paths, SemaphoreSlim maintenanceGat
                 update.Parameters.AddWithValue("$priceMode", priceMode);
                 update.Parameters.AddWithValue("$standardPrice", (object?)standardPriceCents ?? DBNull.Value);
                 update.Parameters.AddWithValue("$standardCost", (object?)standardCostCents ?? DBNull.Value);
+                update.Parameters.AddWithValue("$defaultDuration", (object?)defaultDurationMinutes ?? DBNull.Value);
                 update.Parameters.AddWithValue("$expected", expectedRowVersion);
                 if (await update.ExecuteNonQueryAsync(cancellationToken) == 0)
                 {
@@ -276,7 +292,7 @@ public sealed class WorkTypeService(AppPaths paths, SemaphoreSlim maintenanceGat
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
-            SELECT work_type_id, name, label_text, execution_default, price_mode, standard_price_cents, standard_cost_cents, active, row_version
+            SELECT work_type_id, name, label_text, execution_default, price_mode, standard_price_cents, standard_cost_cents, default_duration_minutes, active, row_version
             FROM work_types
             WHERE active = 1 OR $includeInactive = 1
             ORDER BY sort_order, name;
@@ -295,8 +311,9 @@ public sealed class WorkTypeService(AppPaths paths, SemaphoreSlim maintenanceGat
                 reader.GetString(4),
                 reader.IsDBNull(5) ? null : reader.GetInt32(5),
                 reader.IsDBNull(6) ? null : reader.GetInt32(6),
-                reader.GetInt64(7) == 1,
-                reader.GetInt32(8)));
+                reader.IsDBNull(7) ? null : reader.GetInt32(7),
+                reader.GetInt64(8) == 1,
+                reader.GetInt32(9)));
         }
 
         return results;

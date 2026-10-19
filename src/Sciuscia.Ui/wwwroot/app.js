@@ -1282,7 +1282,7 @@
 
     nascondiErrore();
     try {
-      await window.sciuscia.call("articoli.crea", {
+      const nuovoArticolo = await window.sciuscia.call("articoli.crea", {
         commessaId: commessaCorrenteId,
         categoriaId,
         marcaId,
@@ -1293,6 +1293,10 @@
       });
       chiudiModaleArticolo();
       await ricaricaDettaglioCommessa();
+      // Dopo ogni nuovo articolo serve quasi sempre aggiungere almeno una lavorazione: si
+      // propone subito la finestra, così non bisogna cercarla di nuovo nell'elenco. Se non
+      // serve aggiungere nulla, si chiude semplicemente con "Annulla".
+      apriModaleLavorazione(nuovoArticolo.itemId, nuovoArticolo.visibleCode);
     } catch (errore) {
       mostraErrore("Creazione articolo non riuscita: " + errore.message);
     }
@@ -1846,6 +1850,50 @@
       document.getElementById("calendario-a-data").value = formattaDataPerInput(inNovantaGiorni);
     }
     caricaCalendario();
+    caricaCapacitaGiornaliera();
+  }
+
+  /// Capacità di lavoro interna di una giornata: un unico valore in minuti per tutto il
+  /// laboratorio, mostrato in ore per semplicità (le mezze giornate dimezzano automaticamente).
+  async function caricaCapacitaGiornaliera() {
+    try {
+      const risultato = await window.sciuscia.call("impostazioni.leggiCapacitaGiornaliera");
+      document.getElementById("impostazioni-ore-giorno").value = risultato.capacitaGiornalieraMinuti / 60;
+    } catch (errore) {
+      mostraErrore("Non è stato possibile leggere la capacità giornaliera: " + errore.message);
+    }
+  }
+
+  async function salvaCapacitaGiornaliera() {
+    const oreTesto = document.getElementById("impostazioni-ore-giorno").value.trim();
+    const ore = parseFloat(oreTesto.replace(",", "."));
+    if (!oreTesto || isNaN(ore) || ore <= 0) {
+      mostraErrore("Indica un numero di ore maggiore di zero.");
+      return;
+    }
+
+    nascondiErrore();
+    try {
+      await window.sciuscia.call("impostazioni.impostaCapacitaGiornaliera", {
+        capacitaGiornalieraMinuti: Math.round(ore * 60),
+      });
+      mostraConfermaPulsante(document.getElementById("btn-salva-ore-giorno"), "Salvato ✓");
+    } catch (errore) {
+      mostraErrore("Salvataggio non riuscito: " + errore.message);
+    }
+  }
+
+  /// Conferma visibile e momentanea su un pulsante dopo un'azione riuscita (es. "Aggiorna",
+  /// "Salva"): il testo del pulsante cambia per un istante, così si vede chiaramente che
+  /// qualcosa è successo anche quando il contenuto della pagina non cambia visivamente.
+  function mostraConfermaPulsante(bottone, testoConferma) {
+    const testoOriginale = bottone.textContent;
+    bottone.disabled = true;
+    bottone.textContent = testoConferma;
+    setTimeout(() => {
+      bottone.textContent = testoOriginale;
+      bottone.disabled = false;
+    }, 1200);
   }
 
   function mostraSchermataAgenda() {
@@ -1963,7 +2011,11 @@
   }
 
   document.getElementById("nav-home").addEventListener("click", mostraSchermataHome);
-  document.getElementById("btn-aggiorna-home").addEventListener("click", caricaHome);
+  document.getElementById("btn-aggiorna-home").addEventListener("click", async () => {
+    const bottone = document.getElementById("btn-aggiorna-home");
+    await caricaHome();
+    mostraConfermaPulsante(bottone, "Aggiornato ✓");
+  });
 
   function formattaDataPerInput(data) {
     const anno = data.getFullYear();
@@ -2443,12 +2495,14 @@
       } else if (voce.priceMode === "FASCE") {
         costoTesto = "Vedi fasce";
       }
+      const tempoTesto = voce.defaultDurationMinutes != null ? voce.defaultDurationMinutes + " min" : "—";
       riga.innerHTML = `
         <td>${escapeHtml(voce.name)}</td>
         <td>${escapeHtml(voce.labelText)}</td>
         <td>${voce.executionDefault === "ESTERNA" ? "Esterna" : "Interna"}</td>
         <td>${escapeHtml(prezzoTesto)}</td>
         <td>${escapeHtml(costoTesto)}</td>
+        <td>${escapeHtml(tempoTesto)}</td>
         <td class="${statoClasse}">${voce.active ? "Attiva" : "Disattivata"}</td>
         <td class="azioni-riga">
           <button type="button" class="btn-modifica">Modifica</button>
@@ -2480,6 +2534,9 @@
     document.getElementById("listino-costo-fisso").value = voce && voce.standardCostCents != null
       ? (voce.standardCostCents / 100).toFixed(2)
       : "";
+    document.getElementById("listino-tempo-realizzo").value = voce && voce.defaultDurationMinutes != null
+      ? voce.defaultDurationMinutes
+      : "";
     aggiornaCampiModalitaPrezzoListino();
     document.getElementById("btn-salva-listino").textContent = voce ? "Salva" : "Crea lavorazione";
     document.getElementById("modal-lavorazione-listino").hidden = false;
@@ -2503,6 +2560,7 @@
     const modalitaPrezzo = document.getElementById("listino-modalita-prezzo").value;
     const prezzoTesto = document.getElementById("listino-prezzo-fisso").value.trim();
     const costoTesto = document.getElementById("listino-costo-fisso").value.trim();
+    const tempoRealizzoTesto = document.getElementById("listino-tempo-realizzo").value.trim();
 
     if (!nome || !testoEtichetta) {
       mostraErrore("Nome e testo etichetta sono obbligatori.");
@@ -2515,6 +2573,7 @@
     const costoStandardCents = modalitaPrezzo === "FISSO" && costoTesto !== ""
       ? Math.round(parseFloat(costoTesto.replace(",", ".")) * 100)
       : null;
+    const tempoRealizzoMinuti = tempoRealizzoTesto !== "" ? parseInt(tempoRealizzoTesto, 10) : null;
 
     nascondiErrore();
     try {
@@ -2522,12 +2581,13 @@
         await window.sciuscia.call("anagrafiche.modificaLavorazioneListino", {
           lavorazioneId: lavorazioneListinoInModifica.workTypeId,
           nome, testoEtichetta, esecuzione, modalitaPrezzo, prezzoStandardCents,
-          costoStandardCents,
+          costoStandardCents, tempoRealizzoMinuti,
           rowVersion: lavorazioneListinoInModifica.rowVersion,
         });
       } else {
         await window.sciuscia.call("anagrafiche.creaLavorazioneListino", {
           nome, testoEtichetta, esecuzione, modalitaPrezzo, prezzoStandardCents, costoStandardCents,
+          tempoRealizzoMinuti,
         });
       }
       listinoCache = null;
@@ -2815,6 +2875,7 @@
   }
 
   document.getElementById("btn-mostra-calendario").addEventListener("click", caricaCalendario);
+  document.getElementById("btn-salva-ore-giorno").addEventListener("click", salvaCapacitaGiornaliera);
   document.getElementById("btn-nuova-chiusura-calendario").addEventListener("click", apriModaleChiusuraCalendario);
   document.getElementById("btn-nuova-apertura-calendario").addEventListener("click", apriModaleAperturaCalendario);
   document.getElementById("btn-annulla-chiusura-calendario").addEventListener("click", chiudiModaleChiusuraCalendario);
@@ -2888,6 +2949,25 @@
       }
       return articolo.item.dueDate >= daData && articolo.item.dueDate <= aData;
     });
+
+    // Stesso grafico a barre già presente in "Consulta carico", qui sul periodo Dal/Al scelto
+    // in Agenda, così il carico si vede subito senza dover aprire un'altra finestra.
+    const giorniGraficoAgenda = giorniCalendario.filter((g) => g.date >= daData && g.date <= aData);
+    const carichiPerGiornoAgenda = new Map();
+    for (const articolo of articoli) {
+      const data = articolo.item.dueDate;
+      if (!data) {
+        continue;
+      }
+      if (!carichiPerGiornoAgenda.has(data)) {
+        carichiPerGiornoAgenda.set(data, { totale: 0, urgenti: 0, prioritari: 0 });
+      }
+      const voce = carichiPerGiornoAgenda.get(data);
+      voce.totale += 1;
+      if (articolo.item.isUrgent) voce.urgenti += 1;
+      if (articolo.item.isPriority) voce.prioritari += 1;
+    }
+    costruisciGraficoCarico(giorniGraficoAgenda, carichiPerGiornoAgenda, "agenda-grafico-carico");
 
     document.getElementById("agenda-stato-vuoto").hidden = inPeriodo.length > 0;
     if (inPeriodo.length === 0) {
@@ -3086,7 +3166,11 @@
     stampaDocumenti([], "Agenda lavori", sottotitolo + contenuto.innerHTML);
   }
 
-  document.getElementById("btn-aggiorna-agenda").addEventListener("click", caricaAgenda);
+  document.getElementById("btn-aggiorna-agenda").addEventListener("click", async () => {
+    const bottone = document.getElementById("btn-aggiorna-agenda");
+    await caricaAgenda();
+    mostraConfermaPulsante(bottone, "Aggiornato ✓");
+  });
   document.getElementById("agenda-raggruppa-lavorazione").addEventListener("change", renderAgenda);
   document.getElementById("btn-stampa-agenda").addEventListener("click", stampaAgenda);
   document.getElementById("btn-chiudi-anteprima-agenda").addEventListener("click", chiudiModaleAnteprimaAgenda);
@@ -3179,7 +3263,7 @@
       for (const giorno of giorniCalendario || []) {
         corpo.appendChild(costruisciRigaCarico(giorno, carichiPerGiorno.get(giorno.date)));
       }
-      costruisciGraficoCarico(giorniCalendario || [], carichiPerGiorno);
+      costruisciGraficoCarico(giorniCalendario || [], carichiPerGiorno, "carico-grafico");
     } catch (errore) {
       mostraErrore("Non è stato possibile consultare il carico: " + errore.message);
     }
@@ -3188,9 +3272,10 @@
   /// Un grafico a barre semplice (senza librerie esterne), un po' com'è già stata scritta
   /// l'importazione Excel: ogni colonna è un giorno, l'altezza è proporzionale al numero di
   /// articoli già previsti quel giorno, il colore segue l'esito del giorno (lavorativo, mezza
-  /// giornata, chiuso).
-  function costruisciGraficoCarico(giorniCalendario, carichiPerGiorno) {
-    const contenitore = document.getElementById("carico-grafico");
+  /// giornata, chiuso). Stessa funzione usata sia da "Consulta carico" sia dall'Agenda lavori,
+  /// passando il contenitore giusto in `containerId`.
+  function costruisciGraficoCarico(giorniCalendario, carichiPerGiorno, containerId) {
+    const contenitore = document.getElementById(containerId);
     contenitore.innerHTML = "";
     if (giorniCalendario.length === 0) {
       return;

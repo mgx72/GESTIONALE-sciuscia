@@ -62,9 +62,9 @@ public static class RegistrySelfTest
 
             // --- Listino lavorazioni ---
             var workTypeFixed = await registry.WorkTypes.CreateAsync(
-                "Risuolatura", "Risuolatura", "INTERNA", "FISSO", standardPriceCents: 2500, standardCostCents: 1000);
+                "Risuolatura", "Risuolatura", "INTERNA", "FISSO", standardPriceCents: 2500, standardCostCents: 1000, defaultDurationMinutes: 45);
             var workTypeBands = await registry.WorkTypes.CreateAsync(
-                "Tintura", "Tintura", "ESTERNA", "FASCE", standardPriceCents: null, standardCostCents: null);
+                "Tintura", "Tintura", "ESTERNA", "FASCE", standardPriceCents: null, standardCostCents: null, defaultDurationMinutes: null);
             await registry.WorkTypes.SetPriceBandAsync(workTypeBands.WorkTypeId, "A", 1500, 500);
             await registry.WorkTypes.SetPriceBandAsync(workTypeBands.WorkTypeId, "B", 2000, 700);
             await registry.WorkTypes.SetPriceBandAsync(workTypeBands.WorkTypeId, "C", 2500, 900);
