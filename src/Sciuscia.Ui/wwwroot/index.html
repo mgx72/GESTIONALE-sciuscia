@@ -12,6 +12,7 @@
       <a class="nav-item active" data-view="home" id="nav-home">Home</a>
       <a class="nav-item" data-view="commesse" id="nav-commesse">Commesse</a>
       <a class="nav-item" data-view="agenda" id="nav-agenda">Agenda lavori</a>
+      <a class="nav-item" data-view="pdr" id="nav-pdr">Pronti da ritirare</a>
       <a class="nav-item" data-view="anagrafiche" id="nav-anagrafiche">Anagrafiche</a>
       <a class="nav-item" data-view="impostazioni" id="nav-impostazioni">Impostazioni</a>
     </nav>
@@ -273,6 +274,18 @@
         <div id="agenda-grafico-carico" class="grafico-carico"></div>
         <div id="agenda-contenuto"></div>
         <div id="agenda-stato-vuoto" class="empty-state" hidden>Nessun articolo da lavorare nel periodo selezionato.</div>
+      </div>
+
+      <div id="view-pdr" hidden>
+        <div class="main-header">
+          <h2>Pronti da ritirare</h2>
+          <button type="button" id="btn-aggiorna-pdr">Aggiorna</button>
+        </div>
+        <p class="subtitle-inline">
+          Articoli pronti per il cliente, raggruppati per commessa. I clienti ancora da avvisare compaiono prima, evidenziati; dentro ogni commessa gli articoli già avvisati sono segnalati a parte.
+        </p>
+        <div id="pdr-contenuto"></div>
+        <div id="pdr-stato-vuoto" class="empty-state" hidden>Nessun articolo pronto da ritirare al momento.</div>
       </div>
 
       <div id="view-impostazioni" hidden>

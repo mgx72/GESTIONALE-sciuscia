@@ -1064,3 +1064,90 @@ button.pericoloso:hover {
   color: var(--text-muted);
   font-size: 13px;
 }
+
+/* --- Pronti da ritirare (specifica, sezione 6) --- */
+
+.pdr-gruppo {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+.pdr-gruppo-da-avvisare {
+  border-left: 4px solid var(--danger);
+}
+
+.pdr-gruppo-intestazione {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pdr-gruppo-cliente {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pdr-gruppo-cellulare {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.pdr-gruppo-stato {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.pdr-gruppo-da-avvisare .pdr-gruppo-stato {
+  color: var(--danger);
+}
+
+.pdr-gruppo-azioni {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pdr-gruppo-articoli {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+}
+
+.pdr-articolo-riga {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.pdr-articolo-riga:last-child {
+  border-bottom: none;
+}
+
+.pdr-articolo-riga:hover {
+  color: var(--primary);
+}
+
+.pdr-articolo-stato {
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.pdr-articolo-da-avvisare .pdr-articolo-stato {
+  color: var(--danger);
+  font-weight: 700;
+}

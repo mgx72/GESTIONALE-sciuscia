@@ -17,6 +17,7 @@ public sealed class OrdersRuntime
         Photos = new PhotoService(paths, maintenanceGate, photoStorage, Orders, Items);
         Agenda = new AgendaService(paths);
         Home = new HomeService(paths);
+        ReadyPickups = new ReadyPickupService(paths);
     }
 
     public OrderService Orders { get; }
@@ -26,4 +27,5 @@ public sealed class OrdersRuntime
     public PhotoService Photos { get; }
     public AgendaService Agenda { get; }
     public HomeService Home { get; }
+    public ReadyPickupService ReadyPickups { get; }
 }

@@ -76,11 +76,13 @@
   const vistaAnagrafiche = document.getElementById("view-anagrafiche");
   const vistaImpostazioni = document.getElementById("view-impostazioni");
   const vistaAgenda = document.getElementById("view-agenda");
+  const vistaPdr = document.getElementById("view-pdr");
   let ricercaClientiAnagraficaInCorso = null;
   let articoloDaEvidenziareId = null;
   let agendaCache = [];
   let anteprimaAgendaCorrente = null;
   let consultaCaricoContesto = null;
+  let pdrCache = [];
 
   let clienteSelezionatoId = null;
   let ricercaInCorso = null;
@@ -1788,11 +1790,13 @@
     document.getElementById("nav-home").classList.add("active");
     document.getElementById("nav-commesse").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
+    document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaElenco.hidden = true;
     vistaDettaglio.hidden = true;
     vistaAgenda.hidden = true;
+    vistaPdr.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     vistaHome.hidden = false;
@@ -1804,10 +1808,12 @@
     document.getElementById("nav-commesse").classList.add("active");
     document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
+    document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaAgenda.hidden = true;
+    vistaPdr.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     mostraVistaElenco();
@@ -1819,11 +1825,13 @@
     document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-commesse").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
+    document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaElenco.hidden = true;
     vistaDettaglio.hidden = true;
     vistaAgenda.hidden = true;
+    vistaPdr.hidden = true;
     vistaImpostazioni.hidden = true;
     vistaAnagrafiche.hidden = false;
     nascondiErrore();
@@ -1835,11 +1843,13 @@
     document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-commesse").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
+    document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     vistaHome.hidden = true;
     vistaElenco.hidden = true;
     vistaDettaglio.hidden = true;
     vistaAgenda.hidden = true;
+    vistaPdr.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = false;
     nascondiErrore();
@@ -1900,11 +1910,13 @@
     document.getElementById("nav-agenda").classList.add("active");
     document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-commesse").classList.remove("active");
+    document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaElenco.hidden = true;
     vistaDettaglio.hidden = true;
+    vistaPdr.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     vistaAgenda.hidden = false;
@@ -1916,6 +1928,24 @@
       document.getElementById("agenda-a-data").value = formattaDataPerInput(inDueSettimane);
     }
     caricaAgenda();
+  }
+
+  function mostraSchermataPdr() {
+    document.getElementById("nav-pdr").classList.add("active");
+    document.getElementById("nav-home").classList.remove("active");
+    document.getElementById("nav-commesse").classList.remove("active");
+    document.getElementById("nav-agenda").classList.remove("active");
+    document.getElementById("nav-anagrafiche").classList.remove("active");
+    document.getElementById("nav-impostazioni").classList.remove("active");
+    vistaHome.hidden = true;
+    vistaElenco.hidden = true;
+    vistaDettaglio.hidden = true;
+    vistaAgenda.hidden = true;
+    vistaAnagrafiche.hidden = true;
+    vistaImpostazioni.hidden = true;
+    vistaPdr.hidden = false;
+    nascondiErrore();
+    caricaPdr();
   }
 
   /// Riepilogo operativo (specifica, punto 5 della lista priorità): cinque riquadri che segnalano
@@ -2001,10 +2031,12 @@
     document.getElementById("nav-commesse").classList.add("active");
     document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
+    document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaAgenda.hidden = true;
+    vistaPdr.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     await apriDettaglioCommessa(orderId);
@@ -2028,6 +2060,12 @@
   document.getElementById("nav-anagrafiche").addEventListener("click", mostraSchermataAnagrafiche);
   document.getElementById("nav-impostazioni").addEventListener("click", mostraSchermataImpostazioni);
   document.getElementById("nav-agenda").addEventListener("click", mostraSchermataAgenda);
+  document.getElementById("nav-pdr").addEventListener("click", mostraSchermataPdr);
+  document.getElementById("btn-aggiorna-pdr").addEventListener("click", async () => {
+    const bottone = document.getElementById("btn-aggiorna-pdr");
+    await caricaPdr();
+    mostraConfermaPulsante(bottone, "Aggiornato ✓");
+  });
 
   document.querySelectorAll("#view-anagrafiche .tab-btn").forEach((bottone) => {
     bottone.addEventListener("click", () => {
@@ -3109,13 +3147,154 @@
     document.getElementById("nav-commesse").classList.add("active");
     document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
+    document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaAgenda.hidden = true;
+    vistaPdr.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     await apriDettaglioCommessa(orderId);
+  }
+
+  async function apriCommessaDaPdr(orderId, itemId) {
+    articoloDaEvidenziareId = itemId;
+    document.getElementById("nav-commesse").classList.add("active");
+    document.getElementById("nav-home").classList.remove("active");
+    document.getElementById("nav-agenda").classList.remove("active");
+    document.getElementById("nav-pdr").classList.remove("active");
+    document.getElementById("nav-anagrafiche").classList.remove("active");
+    document.getElementById("nav-impostazioni").classList.remove("active");
+    vistaHome.hidden = true;
+    vistaAgenda.hidden = true;
+    vistaPdr.hidden = true;
+    vistaAnagrafiche.hidden = true;
+    vistaImpostazioni.hidden = true;
+    await apriDettaglioCommessa(orderId);
+  }
+
+  /// Carica l'elenco "Pronti da ritirare" (specifica, sezione 6): articoli pronti per il cliente
+  /// (ancora da avvisare o già avvisati) delle commesse aperte, raggruppati per commessa/cliente.
+  async function caricaPdr() {
+    nascondiErrore();
+    try {
+      pdrCache = await window.sciuscia.call("ritiri.prontiDaRitirare");
+      renderPdr();
+    } catch (errore) {
+      mostraErrore("Non è stato possibile caricare i pronti da ritirare: " + errore.message);
+    }
+  }
+
+  function renderPdr() {
+    const contenuto = document.getElementById("pdr-contenuto");
+    contenuto.innerHTML = "";
+
+    const gruppiPerCommessa = new Map();
+    for (const riga of pdrCache) {
+      if (!gruppiPerCommessa.has(riga.orderId)) {
+        gruppiPerCommessa.set(riga.orderId, {
+          orderId: riga.orderId,
+          orderVisibleCode: riga.orderVisibleCode,
+          customerName: riga.customerName,
+          customerMobile: riga.customerMobile,
+          righe: [],
+        });
+      }
+      gruppiPerCommessa.get(riga.orderId).righe.push(riga);
+    }
+
+    const gruppi = Array.from(gruppiPerCommessa.values());
+    for (const gruppo of gruppi) {
+      gruppo.daAvvisare = gruppo.righe.filter((r) => r.item.workflowStatus === "PRONTO_DA_AVVISARE");
+      gruppo.completamento = gruppo.righe.reduce(
+        (minimo, r) => (!minimo || r.updatedAt < minimo ? r.updatedAt : minimo), null);
+    }
+
+    // Prima i clienti ancora da avvisare, poi la data di completamento (specifica, sezione 6).
+    gruppi.sort((a, b) => {
+      const aDaAvvisare = a.daAvvisare.length > 0 ? 0 : 1;
+      const bDaAvvisare = b.daAvvisare.length > 0 ? 0 : 1;
+      if (aDaAvvisare !== bDaAvvisare) {
+        return aDaAvvisare - bDaAvvisare;
+      }
+      return (a.completamento || "").localeCompare(b.completamento || "");
+    });
+
+    document.getElementById("pdr-stato-vuoto").hidden = gruppi.length > 0;
+    for (const gruppo of gruppi) {
+      contenuto.appendChild(costruisciSchedaPdr(gruppo));
+    }
+  }
+
+  function costruisciSchedaPdr(gruppo) {
+    // Gli articoli ancora da avvisare sono evidenziati e vengono mostrati prima degli avvisati.
+    const righeOrdinate = gruppo.righe.slice().sort((a, b) => {
+      const aDaAvvisare = a.item.workflowStatus === "PRONTO_DA_AVVISARE" ? 0 : 1;
+      const bDaAvvisare = b.item.workflowStatus === "PRONTO_DA_AVVISARE" ? 0 : 1;
+      return aDaAvvisare - bDaAvvisare;
+    });
+
+    const scheda = document.createElement("div");
+    scheda.className = "pdr-gruppo" + (gruppo.daAvvisare.length > 0 ? " pdr-gruppo-da-avvisare" : "");
+
+    const intestazione = document.createElement("div");
+    intestazione.className = "pdr-gruppo-intestazione";
+    intestazione.innerHTML =
+      '<div class="pdr-gruppo-cliente">' +
+      "<strong>" + escapeHtml(gruppo.customerName) + "</strong>" +
+      '<span class="pdr-gruppo-cellulare">' + escapeHtml(gruppo.customerMobile || "Cellulare non registrato") + "</span>" +
+      "</div>" +
+      '<div class="pdr-gruppo-stato">' + (gruppo.daAvvisare.length > 0 ? "Da avvisare" : "Tutti avvisati") + "</div>";
+
+    const azioni = document.createElement("div");
+    azioni.className = "pdr-gruppo-azioni";
+
+    const bottoneApri = document.createElement("button");
+    bottoneApri.type = "button";
+    bottoneApri.textContent = "Apri commessa " + gruppo.orderVisibleCode;
+    bottoneApri.addEventListener("click", () => apriCommessaDaPdr(gruppo.orderId, righeOrdinate[0].item.itemId));
+    azioni.appendChild(bottoneApri);
+
+    const bottoneWhatsApp = document.createElement("button");
+    bottoneWhatsApp.type = "button";
+    bottoneWhatsApp.className = "primary";
+    bottoneWhatsApp.textContent = "Prepara avviso WhatsApp";
+    bottoneWhatsApp.disabled = gruppo.daAvvisare.length === 0;
+    bottoneWhatsApp.addEventListener("click", () => preparaAvvisoWhatsAppPdr(gruppo));
+    azioni.appendChild(bottoneWhatsApp);
+
+    intestazione.appendChild(azioni);
+    scheda.appendChild(intestazione);
+
+    const elencoArticoli = document.createElement("div");
+    elencoArticoli.className = "pdr-gruppo-articoli";
+    for (const riga of righeOrdinate) {
+      const daAvvisare = riga.item.workflowStatus === "PRONTO_DA_AVVISARE";
+      const bottoneArticolo = document.createElement("button");
+      bottoneArticolo.type = "button";
+      bottoneArticolo.className = "pdr-articolo-riga" + (daAvvisare ? " pdr-articolo-da-avvisare" : "");
+      bottoneArticolo.innerHTML =
+        "<span>" + escapeHtml(riga.item.visibleCode + " — " + riga.categoryName + " — " + riga.item.description) + "</span>" +
+        '<span class="pdr-articolo-stato">' + (daAvvisare ? "Da avvisare" : "Avvisato") + "</span>";
+      bottoneArticolo.addEventListener("click", () => apriCommessaDaPdr(gruppo.orderId, riga.item.itemId));
+      elencoArticoli.appendChild(bottoneArticolo);
+    }
+    scheda.appendChild(elencoArticoli);
+
+    return scheda;
+  }
+
+  /// Apre direttamente la finestra "Nuovo messaggio al cliente" con tutti gli articoli ancora da
+  /// avvisare già preselezionati (specifica, sezione 6: "consentendo un avviso parziale" se poi
+  /// l'operatore deseleziona qualcosa prima di registrare).
+  async function preparaAvvisoWhatsAppPdr(gruppo) {
+    const idsDaAvvisare = gruppo.daAvvisare.map((r) => r.item.itemId);
+    if (idsDaAvvisare.length === 0) {
+      return;
+    }
+    await apriCommessaDaPdr(gruppo.orderId, idsDaAvvisare[0]);
+    apriModaleMessaggio("AVVISO_PRONTO", idsDaAvvisare);
   }
 
   async function segnaProntoDaAgenda() {

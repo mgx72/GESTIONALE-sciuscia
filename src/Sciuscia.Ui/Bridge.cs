@@ -71,6 +71,7 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                 "impostazioni.impostaCapacitaGiornaliera" => await ImpostaCapacitaGiornalieraAsync(request.Payload),
                 "agenda.elenco" => await AgendaElencoAsync(),
                 "home.riepilogo" => await runtime.Orders.Home.GetRiepilogoAsync(),
+                "ritiri.prontiDaRitirare" => await runtime.Orders.ReadyPickups.ListAsync(),
                 "anagrafiche.artigiani" => await runtime.Registry.Artisans.ListAsync(OptionalBool(request.Payload, "includiInattive") ?? false),
                 "anagrafiche.creaArtigiano" => await CreaArtigianoAsync(request.Payload),
                 "anagrafiche.modificaArtigiano" => await ModificaArtigianoAsync(request.Payload),
