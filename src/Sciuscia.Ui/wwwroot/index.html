@@ -9,7 +9,8 @@
   <div id="app">
     <nav class="sidebar">
       <h1>Sciuscià</h1>
-      <a class="nav-item active" data-view="commesse" id="nav-commesse">Commesse</a>
+      <a class="nav-item active" data-view="home" id="nav-home">Home</a>
+      <a class="nav-item" data-view="commesse" id="nav-commesse">Commesse</a>
       <a class="nav-item" data-view="agenda" id="nav-agenda">Agenda lavori</a>
       <a class="nav-item" data-view="anagrafiche" id="nav-anagrafiche">Anagrafiche</a>
       <a class="nav-item" data-view="impostazioni" id="nav-impostazioni">Impostazioni</a>
@@ -18,7 +19,51 @@
     <main class="main">
       <div id="error-banner" class="error-banner" hidden></div>
 
-      <div id="view-elenco-commesse">
+      <div id="view-home">
+        <div class="main-header">
+          <h2>Home</h2>
+          <button type="button" id="btn-aggiorna-home">Aggiorna</button>
+        </div>
+
+        <div class="griglia-home">
+          <div class="panel riquadro-home">
+            <h3>Lavori urgenti o in ritardo</h3>
+            <div class="riquadro-home-numero" id="home-lavori-numero">0</div>
+            <div class="riquadro-home-elenco" id="home-lavori-elenco"></div>
+            <div class="riquadro-home-vuoto" id="home-lavori-vuoto" hidden>Nessun lavoro urgente o in ritardo.</div>
+          </div>
+
+          <div class="panel riquadro-home">
+            <h3>Commesse senza fotografie</h3>
+            <div class="riquadro-home-numero" id="home-foto-numero">0</div>
+            <div class="riquadro-home-elenco" id="home-foto-elenco"></div>
+            <div class="riquadro-home-vuoto" id="home-foto-vuoto" hidden>Tutte le commesse aperte hanno almeno una fotografia.</div>
+          </div>
+
+          <div class="panel riquadro-home">
+            <h3>Pronti da avvisare</h3>
+            <div class="riquadro-home-numero" id="home-pronti-numero">0</div>
+            <div class="riquadro-home-elenco" id="home-pronti-elenco"></div>
+            <div class="riquadro-home-vuoto" id="home-pronti-vuoto" hidden>Nessun articolo pronto in attesa di avviso.</div>
+          </div>
+
+          <div class="panel riquadro-home">
+            <h3>Preventivi senza risposta da più di 7 giorni</h3>
+            <div class="riquadro-home-numero" id="home-preventivi-numero">0</div>
+            <div class="riquadro-home-elenco" id="home-preventivi-elenco"></div>
+            <div class="riquadro-home-vuoto" id="home-preventivi-vuoto" hidden>Nessun preventivo in attesa da troppo tempo.</div>
+          </div>
+
+          <div class="panel riquadro-home">
+            <h3>Ritiri da sollecitare da più di 30 giorni</h3>
+            <div class="riquadro-home-numero" id="home-ritiri-numero">0</div>
+            <div class="riquadro-home-elenco" id="home-ritiri-elenco"></div>
+            <div class="riquadro-home-vuoto" id="home-ritiri-vuoto" hidden>Nessun ritiro da sollecitare.</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="view-elenco-commesse" hidden>
         <div class="main-header">
           <h2>Commesse aperte</h2>
           <button id="btn-nuova-commessa" class="primary">+ Nuova commessa</button>

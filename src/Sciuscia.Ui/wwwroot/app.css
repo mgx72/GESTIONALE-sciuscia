@@ -982,3 +982,76 @@ button.pericoloso:hover {
   margin-top: 4px;
   white-space: nowrap;
 }
+
+/* --- Home --- */
+
+.griglia-home {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.riquadro-home {
+  padding: 16px;
+}
+
+.riquadro-home h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.riquadro-home-numero {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.riquadro-home-numero.con-segnalazioni {
+  color: var(--danger);
+}
+
+.riquadro-home-elenco {
+  display: flex;
+  flex-direction: column;
+}
+
+.riquadro-home-riga {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  cursor: pointer;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  width: 100%;
+  text-align: left;
+}
+
+.riquadro-home-riga:last-child {
+  border-bottom: none;
+}
+
+.riquadro-home-riga:hover {
+  color: var(--primary);
+}
+
+.riquadro-home-riga-dettaglio {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.riquadro-home-altri {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+.riquadro-home-vuoto {
+  color: var(--text-muted);
+  font-size: 13px;
+}

@@ -8,6 +8,7 @@
   const risultatiClienti = document.getElementById("risultati-clienti");
   const boxNuovoCliente = document.getElementById("box-nuovo-cliente");
 
+  const vistaHome = document.getElementById("view-home");
   const vistaElenco = document.getElementById("view-elenco-commesse");
   const vistaDettaglio = document.getElementById("view-dettaglio-commessa");
   const listaArticoli = document.getElementById("lista-articoli");
@@ -1779,11 +1780,29 @@
 
   // --- Navigazione principale (Commesse / Anagrafiche) ---
 
-  function mostraSchermataCommesse() {
-    document.getElementById("nav-commesse").classList.add("active");
+  function mostraSchermataHome() {
+    document.getElementById("nav-home").classList.add("active");
+    document.getElementById("nav-commesse").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
+    vistaElenco.hidden = true;
+    vistaDettaglio.hidden = true;
+    vistaAgenda.hidden = true;
+    vistaAnagrafiche.hidden = true;
+    vistaImpostazioni.hidden = true;
+    vistaHome.hidden = false;
+    nascondiErrore();
+    caricaHome();
+  }
+
+  function mostraSchermataCommesse() {
+    document.getElementById("nav-commesse").classList.add("active");
+    document.getElementById("nav-home").classList.remove("active");
+    document.getElementById("nav-agenda").classList.remove("active");
+    document.getElementById("nav-anagrafiche").classList.remove("active");
+    document.getElementById("nav-impostazioni").classList.remove("active");
+    vistaHome.hidden = true;
     vistaAgenda.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
@@ -1793,9 +1812,11 @@
 
   function mostraSchermataAnagrafiche() {
     document.getElementById("nav-anagrafiche").classList.add("active");
+    document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-commesse").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
+    vistaHome.hidden = true;
     vistaElenco.hidden = true;
     vistaDettaglio.hidden = true;
     vistaAgenda.hidden = true;
@@ -1807,9 +1828,11 @@
 
   function mostraSchermataImpostazioni() {
     document.getElementById("nav-impostazioni").classList.add("active");
+    document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-commesse").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
+    vistaHome.hidden = true;
     vistaElenco.hidden = true;
     vistaDettaglio.hidden = true;
     vistaAgenda.hidden = true;
@@ -1827,9 +1850,11 @@
 
   function mostraSchermataAgenda() {
     document.getElementById("nav-agenda").classList.add("active");
+    document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-commesse").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
+    vistaHome.hidden = true;
     vistaElenco.hidden = true;
     vistaDettaglio.hidden = true;
     vistaAnagrafiche.hidden = true;
@@ -1844,6 +1869,101 @@
     }
     caricaAgenda();
   }
+
+  /// Riepilogo operativo (specifica, punto 5 della lista priorità): cinque riquadri che segnalano
+  /// cosa richiede attenzione oggi. Ogni riga apre direttamente la commessa interessata, come già
+  /// avviene dall'Agenda, per restare "semplice e intuitiva" come richiesto.
+  async function caricaHome() {
+    nascondiErrore();
+    try {
+      const riepilogo = await window.sciuscia.call("home.riepilogo");
+
+      popolaRiquadroHome("lavori", riepilogo.lavoriUrgentiInRitardo, (riga) => ({
+        testo: riga.customerName + " — " + riga.categoryName + (riga.isUrgent ? " (urgente)" : "") +
+          " — " + riga.orderVisibleCode,
+        dettaglio: riga.dueDate ? formattaDataItaliana(riga.dueDate) : "senza data",
+        orderId: riga.orderId,
+        itemId: riga.itemId,
+      }));
+
+      popolaRiquadroHome("foto", riepilogo.commesseSenzaFoto, (riga) => ({
+        testo: riga.customerName + " — " + riga.orderVisibleCode,
+        dettaglio: formattaData(riga.receivedAt),
+        orderId: riga.orderId,
+      }));
+
+      popolaRiquadroHome("pronti", riepilogo.prontiDaAvvisare, (riga) => ({
+        testo: riga.customerName + " — " + riga.categoryName + " — " + riga.orderVisibleCode,
+        dettaglio: "",
+        orderId: riga.orderId,
+        itemId: riga.itemId,
+      }));
+
+      popolaRiquadroHome("preventivi", riepilogo.preventiviScaduti, (riga) => ({
+        testo: riga.customerName + " — " + riga.categoryName + " (" + riga.lavorazioneNome + ") — " + riga.orderVisibleCode,
+        dettaglio: riga.giorniAttesa + " gg",
+        orderId: riga.orderId,
+        itemId: riga.itemId,
+      }));
+
+      popolaRiquadroHome("ritiri", riepilogo.ritiriDaSollecitare, (riga) => ({
+        testo: riga.customerName + " — " + riga.categoryName + " — " + riga.orderVisibleCode,
+        dettaglio: riga.giorniAttesa + " gg",
+        orderId: riga.orderId,
+        itemId: riga.itemId,
+      }));
+    } catch (errore) {
+      mostraErrore("Non è stato possibile caricare la Home: " + errore.message);
+    }
+  }
+
+  function popolaRiquadroHome(prefisso, righe, trasforma) {
+    const numero = document.getElementById("home-" + prefisso + "-numero");
+    const elenco = document.getElementById("home-" + prefisso + "-elenco");
+    const vuoto = document.getElementById("home-" + prefisso + "-vuoto");
+
+    numero.textContent = String(righe.length);
+    numero.classList.toggle("con-segnalazioni", righe.length > 0);
+    elenco.innerHTML = "";
+    vuoto.hidden = righe.length > 0;
+
+    const MASSIMO_VISIBILE = 5;
+    for (const riga of righe.slice(0, MASSIMO_VISIBILE)) {
+      const dati = trasforma(riga);
+      const bottone = document.createElement("button");
+      bottone.type = "button";
+      bottone.className = "riquadro-home-riga";
+      bottone.innerHTML =
+        "<span>" + escapeHtml(dati.testo) + "</span>" +
+        (dati.dettaglio ? '<span class="riquadro-home-riga-dettaglio">' + escapeHtml(dati.dettaglio) + "</span>" : "");
+      bottone.addEventListener("click", () => apriCommessaDaHome(dati.orderId, dati.itemId || null));
+      elenco.appendChild(bottone);
+    }
+
+    if (righe.length > MASSIMO_VISIBILE) {
+      const altri = document.createElement("div");
+      altri.className = "riquadro-home-altri";
+      altri.textContent = "+ altri " + (righe.length - MASSIMO_VISIBILE);
+      elenco.appendChild(altri);
+    }
+  }
+
+  async function apriCommessaDaHome(orderId, itemId) {
+    articoloDaEvidenziareId = itemId;
+    document.getElementById("nav-commesse").classList.add("active");
+    document.getElementById("nav-home").classList.remove("active");
+    document.getElementById("nav-agenda").classList.remove("active");
+    document.getElementById("nav-anagrafiche").classList.remove("active");
+    document.getElementById("nav-impostazioni").classList.remove("active");
+    vistaHome.hidden = true;
+    vistaAgenda.hidden = true;
+    vistaAnagrafiche.hidden = true;
+    vistaImpostazioni.hidden = true;
+    await apriDettaglioCommessa(orderId);
+  }
+
+  document.getElementById("nav-home").addEventListener("click", mostraSchermataHome);
+  document.getElementById("btn-aggiorna-home").addEventListener("click", caricaHome);
 
   function formattaDataPerInput(data) {
     const anno = data.getFullYear();
@@ -2915,9 +3035,11 @@
     chiudiModaleAnteprimaAgenda();
     articoloDaEvidenziareId = itemId;
     document.getElementById("nav-commesse").classList.add("active");
+    document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
+    vistaHome.hidden = true;
     vistaAgenda.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
@@ -3158,5 +3280,5 @@
   document.getElementById("btn-aggiorna-carico").addEventListener("click", caricaConsultaCarico);
   document.getElementById("btn-chiudi-consulta-carico").addEventListener("click", chiudiConsultaCarico);
 
-  caricaCommesse();
+  caricaHome();
 })();

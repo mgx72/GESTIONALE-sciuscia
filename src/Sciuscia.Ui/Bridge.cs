@@ -68,6 +68,7 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                 "impostazioni.creaAperturaCalendario" => await CreaAperturaCalendarioAsync(request.Payload),
                 "impostazioni.eliminaEccezioneCalendario" => await EliminaEccezioneCalendarioAsync(request.Payload),
                 "agenda.elenco" => await AgendaElencoAsync(),
+                "home.riepilogo" => await runtime.Orders.Home.GetRiepilogoAsync(),
                 "anagrafiche.artigiani" => await runtime.Registry.Artisans.ListAsync(OptionalBool(request.Payload, "includiInattive") ?? false),
                 "anagrafiche.creaArtigiano" => await CreaArtigianoAsync(request.Payload),
                 "anagrafiche.modificaArtigiano" => await ModificaArtigianoAsync(request.Payload),
