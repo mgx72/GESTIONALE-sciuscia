@@ -215,9 +215,11 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         var righe = await runtime.Orders.Agenda.ListDaLavorareAsync();
         var listino = await runtime.Registry.WorkTypes.ListAsync(includeInactive: true);
         var ordineLavorazione = new Dictionary<string, int>();
+        var durataLavorazione = new Dictionary<string, int?>();
         for (var indice = 0; indice < listino.Count; indice++)
         {
             ordineLavorazione[listino[indice].WorkTypeId] = indice;
+            durataLavorazione[listino[indice].WorkTypeId] = listino[indice].DefaultDurationMinutes;
         }
 
         var risultati = new List<AgendaItemDto>();
@@ -230,7 +232,10 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                     w.AppliedLabelText,
                     w.SourceWorkTypeId is not null && ordineLavorazione.TryGetValue(w.SourceWorkTypeId, out var posizione)
                         ? posizione
-                        : int.MaxValue))
+                        : int.MaxValue,
+                    w.SourceWorkTypeId is not null && durataLavorazione.TryGetValue(w.SourceWorkTypeId, out var minuti)
+                        ? minuti
+                        : null))
                 .OrderBy(w => w.Ordine)
                 .ThenBy(w => w.Etichetta)
                 .ToList();
@@ -933,8 +938,12 @@ internal sealed record AgendaItemDto(
     string BrandName,
     IReadOnlyList<AgendaWorkDto> Works);
 
-/// <summary>Una lavorazione interna mostrata nell'Agenda, con la sua posizione nell'ordine del Listino (per il raggruppamento).</summary>
-internal sealed record AgendaWorkDto(string Etichetta, int Ordine);
+/// <summary>
+/// Una lavorazione interna mostrata nell'Agenda, con la sua posizione nell'ordine del Listino
+/// (per il raggruppamento) e il tempo di realizzo stimato (per il carico a ore in "Consulta
+/// carico"/Agenda) — assente se la lavorazione del Listino non ha un tempo impostato.
+/// </summary>
+internal sealed record AgendaWorkDto(string Etichetta, int Ordine, int? DurationMinutes);
 
 /// <summary>Fotografia pronta per la pagina: l'immagine è già inclusa come data URL, così la pagina la mostra senza un'altra richiesta.</summary>
 internal sealed record PhotoDto(

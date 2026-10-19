@@ -2953,21 +2953,13 @@
     // Stesso grafico a barre già presente in "Consulta carico", qui sul periodo Dal/Al scelto
     // in Agenda, così il carico si vede subito senza dover aprire un'altra finestra.
     const giorniGraficoAgenda = giorniCalendario.filter((g) => g.date >= daData && g.date <= aData);
-    const carichiPerGiornoAgenda = new Map();
-    for (const articolo of articoli) {
-      const data = articolo.item.dueDate;
-      if (!data) {
-        continue;
-      }
-      if (!carichiPerGiornoAgenda.has(data)) {
-        carichiPerGiornoAgenda.set(data, { totale: 0, urgenti: 0, prioritari: 0 });
-      }
-      const voce = carichiPerGiornoAgenda.get(data);
-      voce.totale += 1;
-      if (articolo.item.isUrgent) voce.urgenti += 1;
-      if (articolo.item.isPriority) voce.prioritari += 1;
+    const carichiPerGiornoAgenda = costruisciCarichiPerGiorno(articoli);
+    try {
+      const capacita = await window.sciuscia.call("impostazioni.leggiCapacitaGiornaliera");
+      costruisciGraficoCarico(giorniGraficoAgenda, carichiPerGiornoAgenda, "agenda-grafico-carico", capacita.capacitaGiornalieraMinuti);
+    } catch (errore) {
+      costruisciGraficoCarico(giorniGraficoAgenda, carichiPerGiornoAgenda, "agenda-grafico-carico", 0);
     }
-    costruisciGraficoCarico(giorniGraficoAgenda, carichiPerGiornoAgenda, "agenda-grafico-carico");
 
     document.getElementById("agenda-stato-vuoto").hidden = inPeriodo.length > 0;
     if (inPeriodo.length === 0) {
@@ -3233,9 +3225,10 @@
 
     nascondiErrore();
     try {
-      const [articoli, giorniCalendario] = await Promise.all([
+      const [articoli, giorniCalendario, capacita] = await Promise.all([
         window.sciuscia.call("agenda.elenco"),
         window.sciuscia.call("impostazioni.calendario", { daData, aData }),
+        window.sciuscia.call("impostazioni.leggiCapacitaGiornaliera"),
       ]);
 
       const oggiTesto = formattaDataPerInput(new Date());
@@ -3245,36 +3238,54 @@
           ? `Arretrati (consegna già scaduta, articolo non ancora pronto): ${arretrati.length}`
           : "Nessun arretrato al momento.";
 
-      const carichiPerGiorno = new Map();
-      for (const articolo of articoli) {
-        const data = articolo.item.dueDate;
-        if (!data) {
-          continue;
-        }
-        if (!carichiPerGiorno.has(data)) {
-          carichiPerGiorno.set(data, { totale: 0, urgenti: 0, prioritari: 0 });
-        }
-        const voce = carichiPerGiorno.get(data);
-        voce.totale += 1;
-        if (articolo.item.isUrgent) voce.urgenti += 1;
-        if (articolo.item.isPriority) voce.prioritari += 1;
-      }
+      const carichiPerGiorno = costruisciCarichiPerGiorno(articoli);
 
       for (const giorno of giorniCalendario || []) {
         corpo.appendChild(costruisciRigaCarico(giorno, carichiPerGiorno.get(giorno.date)));
       }
-      costruisciGraficoCarico(giorniCalendario || [], carichiPerGiorno, "carico-grafico");
+      costruisciGraficoCarico(giorniCalendario || [], carichiPerGiorno, "carico-grafico", capacita.capacitaGiornalieraMinuti);
     } catch (errore) {
       mostraErrore("Non è stato possibile consultare il carico: " + errore.message);
     }
   }
 
+  /// Somma i tempi di realizzo (minuti) delle lavorazioni interne ancora da fare di un articolo
+  /// (vedi il campo "Tempo di realizzo" nel Listino). Le lavorazioni senza un tempo impostato non
+  /// contano nel totale (così come indicato all'operatore nel Listino).
+  function minutiLavorazioniInterne(articolo) {
+    return (articolo.works || []).reduce((somma, lavorazione) => somma + (lavorazione.durationMinutes || 0), 0);
+  }
+
+  /// Raggruppa gli articoli per data prevista, con sia il conteggio (usato dalla tabella di
+  /// "Consulta carico") sia i minuti totali di lavorazioni interne (usati dal grafico a ore).
+  function costruisciCarichiPerGiorno(articoli) {
+    const carichiPerGiorno = new Map();
+    for (const articolo of articoli) {
+      const data = articolo.item.dueDate;
+      if (!data) {
+        continue;
+      }
+      if (!carichiPerGiorno.has(data)) {
+        carichiPerGiorno.set(data, { totale: 0, urgenti: 0, prioritari: 0, minuti: 0 });
+      }
+      const voce = carichiPerGiorno.get(data);
+      voce.totale += 1;
+      if (articolo.item.isUrgent) voce.urgenti += 1;
+      if (articolo.item.isPriority) voce.prioritari += 1;
+      voce.minuti += minutiLavorazioniInterne(articolo);
+    }
+    return carichiPerGiorno;
+  }
+
   /// Un grafico a barre semplice (senza librerie esterne), un po' com'è già stata scritta
   /// l'importazione Excel: ogni colonna è un giorno, l'altezza è proporzionale al numero di
   /// articoli già previsti quel giorno, il colore segue l'esito del giorno (lavorativo, mezza
-  /// giornata, chiuso). Stessa funzione usata sia da "Consulta carico" sia dall'Agenda lavori,
-  /// passando il contenitore giusto in `containerId`.
-  function costruisciGraficoCarico(giorniCalendario, carichiPerGiorno, containerId) {
+  /// giornata, chiuso). Se il tempo previsto delle lavorazioni (quando impostato nel Listino)
+  /// supera la capacità giornaliera di quel giorno, la colonna viene segnalata chiaramente
+  /// (barra e numero in rosso, con un'icona di avviso): è solo un segnale, non impedisce nulla.
+  /// Stessa funzione usata sia da "Consulta carico" sia dall'Agenda lavori, passando il
+  /// contenitore giusto in `containerId`.
+  function costruisciGraficoCarico(giorniCalendario, carichiPerGiorno, containerId, capacitaGiornalieraMinuti) {
     const contenitore = document.getElementById(containerId);
     contenitore.innerHTML = "";
     if (giorniCalendario.length === 0) {
@@ -3284,22 +3295,37 @@
     const massimo = Math.max(1, ...giorniCalendario.map((g) => (carichiPerGiorno.get(g.date) || { totale: 0 }).totale));
 
     for (const giorno of giorniCalendario) {
-      const carico = carichiPerGiorno.get(giorno.date) || { totale: 0, urgenti: 0, prioritari: 0 };
-      const classeBarra = giorno.capacityFactor === 0 ? "chiuso" : giorno.capacityFactor === 0.5 ? "mezza" : "";
+      const carico = carichiPerGiorno.get(giorno.date) || { totale: 0, urgenti: 0, prioritari: 0, minuti: 0 };
+      const sogliaMinuti = (capacitaGiornalieraMinuti || 0) * giorno.capacityFactor;
+      const superato = giorno.capacityFactor > 0 && sogliaMinuti > 0 && carico.minuti > sogliaMinuti;
+      const classeBarra = (giorno.capacityFactor === 0 ? "chiuso" : giorno.capacityFactor === 0.5 ? "mezza" : "") + (superato ? " superato" : "");
       const altezza = Math.max(2, Math.round((carico.totale / massimo) * 100));
       const motivoChiusura = giorno.capacityFactor < 1 ? ` (${giorno.reason})` : "";
-      const titolo = `${formattaDataItaliana(giorno.date)} — ${carico.totale} previst${carico.totale === 1 ? "o" : "i"}${motivoChiusura}`;
+      const oreTempoTesto = carico.minuti > 0 ? ` — tempo previsto ${formattaOreMinuti(carico.minuti)} su ${formattaOreMinuti(sogliaMinuti)} disponibili` : "";
+      const titolo = `${formattaDataItaliana(giorno.date)} — ${carico.totale} previst${carico.totale === 1 ? "o" : "i"}${oreTempoTesto}${motivoChiusura}${superato ? " — CARICO SUPERATO" : ""}`;
 
       const colonna = document.createElement("div");
       colonna.className = "grafico-carico-colonna";
       colonna.title = titolo;
       colonna.innerHTML = `
-        <div class="grafico-carico-valore">${carico.totale > 0 ? carico.totale : ""}</div>
+        <div class="grafico-carico-valore${superato ? " superato" : ""}">${superato ? "⚠ " : ""}${carico.totale > 0 ? carico.totale : ""}</div>
         <div class="grafico-carico-traccia"><div class="grafico-carico-barra ${classeBarra}" style="height:${altezza}%"></div></div>
         <div class="grafico-carico-giorno">${new Date(giorno.date + "T00:00:00").getDate()}</div>
       `;
       contenitore.appendChild(colonna);
     }
+  }
+
+  /// Minuti in formato leggibile "1h 30min" (o solo "45min" sotto l'ora), per i messaggi del
+  /// grafico del carico.
+  function formattaOreMinuti(minuti) {
+    const totale = Math.round(minuti);
+    const ore = Math.floor(totale / 60);
+    const resto = totale % 60;
+    if (ore === 0) {
+      return `${resto}min`;
+    }
+    return resto === 0 ? `${ore}h` : `${ore}h ${resto}min`;
   }
 
   function costruisciRigaCarico(giorno, carico) {

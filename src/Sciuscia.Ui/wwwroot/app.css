@@ -976,6 +976,15 @@ button.pericoloso:hover {
   background: #e3b341;
 }
 
+.grafico-carico-barra.superato {
+  background: var(--danger);
+}
+
+.grafico-carico-valore.superato {
+  color: var(--danger);
+  font-weight: 700;
+}
+
 .grafico-carico-giorno {
   font-size: 9px;
   color: var(--text-muted);
