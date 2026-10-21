@@ -77,12 +77,15 @@
   const vistaImpostazioni = document.getElementById("view-impostazioni");
   const vistaAgenda = document.getElementById("view-agenda");
   const vistaPdr = document.getElementById("view-pdr");
+  const vistaPa = document.getElementById("view-pa");
   let ricercaClientiAnagraficaInCorso = null;
   let articoloDaEvidenziareId = null;
   let agendaCache = [];
   let anteprimaAgendaCorrente = null;
   let consultaCaricoContesto = null;
   let pdrCache = [];
+  let paCache = [];
+  let anteprimaArtigianiCorrente = null;
 
   let clienteSelezionatoId = null;
   let ricercaInCorso = null;
@@ -1791,12 +1794,14 @@
     document.getElementById("nav-commesse").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
+    document.getElementById("nav-pa").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaElenco.hidden = true;
     vistaDettaglio.hidden = true;
     vistaAgenda.hidden = true;
     vistaPdr.hidden = true;
+    vistaPa.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     vistaHome.hidden = false;
@@ -1809,11 +1814,13 @@
     document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
+    document.getElementById("nav-pa").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaAgenda.hidden = true;
     vistaPdr.hidden = true;
+    vistaPa.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     mostraVistaElenco();
@@ -1826,12 +1833,14 @@
     document.getElementById("nav-commesse").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
+    document.getElementById("nav-pa").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaElenco.hidden = true;
     vistaDettaglio.hidden = true;
     vistaAgenda.hidden = true;
     vistaPdr.hidden = true;
+    vistaPa.hidden = true;
     vistaImpostazioni.hidden = true;
     vistaAnagrafiche.hidden = false;
     nascondiErrore();
@@ -1844,12 +1853,14 @@
     document.getElementById("nav-commesse").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
+    document.getElementById("nav-pa").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     vistaHome.hidden = true;
     vistaElenco.hidden = true;
     vistaDettaglio.hidden = true;
     vistaAgenda.hidden = true;
     vistaPdr.hidden = true;
+    vistaPa.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = false;
     nascondiErrore();
@@ -1911,12 +1922,14 @@
     document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-commesse").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
+    document.getElementById("nav-pa").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaElenco.hidden = true;
     vistaDettaglio.hidden = true;
     vistaPdr.hidden = true;
+    vistaPa.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     vistaAgenda.hidden = false;
@@ -1935,17 +1948,39 @@
     document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-commesse").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
+    document.getElementById("nav-pa").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaElenco.hidden = true;
     vistaDettaglio.hidden = true;
     vistaAgenda.hidden = true;
+    vistaPa.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     vistaPdr.hidden = false;
     nascondiErrore();
     caricaPdr();
+  }
+
+  function mostraSchermataPa() {
+    document.getElementById("nav-pa").classList.add("active");
+    document.getElementById("nav-home").classList.remove("active");
+    document.getElementById("nav-commesse").classList.remove("active");
+    document.getElementById("nav-agenda").classList.remove("active");
+    document.getElementById("nav-pdr").classList.remove("active");
+    document.getElementById("nav-anagrafiche").classList.remove("active");
+    document.getElementById("nav-impostazioni").classList.remove("active");
+    vistaHome.hidden = true;
+    vistaElenco.hidden = true;
+    vistaDettaglio.hidden = true;
+    vistaAgenda.hidden = true;
+    vistaPdr.hidden = true;
+    vistaAnagrafiche.hidden = true;
+    vistaImpostazioni.hidden = true;
+    vistaPa.hidden = false;
+    nascondiErrore();
+    caricaPa();
   }
 
   /// Riepilogo operativo (specifica, punto 5 della lista priorità): cinque riquadri che segnalano
@@ -2032,11 +2067,13 @@
     document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
+    document.getElementById("nav-pa").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaAgenda.hidden = true;
     vistaPdr.hidden = true;
+    vistaPa.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     await apriDettaglioCommessa(orderId);
@@ -2064,6 +2101,12 @@
   document.getElementById("btn-aggiorna-pdr").addEventListener("click", async () => {
     const bottone = document.getElementById("btn-aggiorna-pdr");
     await caricaPdr();
+    mostraConfermaPulsante(bottone, "Aggiornato ✓");
+  });
+  document.getElementById("nav-pa").addEventListener("click", mostraSchermataPa);
+  document.getElementById("btn-aggiorna-pa").addEventListener("click", async () => {
+    const bottone = document.getElementById("btn-aggiorna-pa");
+    await caricaPa();
     mostraConfermaPulsante(bottone, "Aggiornato ✓");
   });
 
@@ -2384,6 +2427,7 @@
         <td>${escapeHtml(artigiano.displayName)}</td>
         <td>${escapeHtml(artigiano.phone || "")}</td>
         <td>${escapeHtml(artigiano.email || "")}</td>
+        <td>${artigiano.solicitAfterDays ? artigiano.solicitAfterDays + " gg" : "—"}</td>
         <td class="${statoClasse}">${artigiano.active ? "Attivo" : "Disattivato"}</td>
         <td class="azioni-riga">
           <button type="button" class="btn-modifica">Modifica</button>
@@ -2405,6 +2449,8 @@
     document.getElementById("artigiano-anagrafica-telefono").value = artigiano ? (artigiano.phone || "") : "";
     document.getElementById("artigiano-anagrafica-email").value = artigiano ? (artigiano.email || "") : "";
     document.getElementById("artigiano-anagrafica-indirizzo").value = artigiano ? (artigiano.address || "") : "";
+    document.getElementById("artigiano-anagrafica-sollecito").value =
+      artigiano && artigiano.solicitAfterDays ? artigiano.solicitAfterDays : "";
     document.getElementById("modal-artigiano-anagrafica").hidden = false;
   }
 
@@ -2418,9 +2464,15 @@
     const telefono = document.getElementById("artigiano-anagrafica-telefono").value.trim() || null;
     const email = document.getElementById("artigiano-anagrafica-email").value.trim() || null;
     const indirizzo = document.getElementById("artigiano-anagrafica-indirizzo").value.trim() || null;
+    const soglieSollecitoTesto = document.getElementById("artigiano-anagrafica-sollecito").value.trim();
+    const giorniSollecito = soglieSollecitoTesto ? parseInt(soglieSollecitoTesto, 10) : null;
 
     if (!nome) {
       mostraErrore("Il nome dell'artigiano è obbligatorio.");
+      return;
+    }
+    if (giorniSollecito !== null && (!Number.isInteger(giorniSollecito) || giorniSollecito <= 0)) {
+      mostraErrore("I giorni di sollecito devono essere un numero intero maggiore di zero.");
       return;
     }
 
@@ -2429,11 +2481,11 @@
       if (artigianoAnagraficaInModifica) {
         await window.sciuscia.call("anagrafiche.modificaArtigiano", {
           artigianoId: artigianoAnagraficaInModifica.artisanId,
-          nome, contatto, telefono, email, indirizzo,
+          nome, contatto, telefono, email, indirizzo, giorniSollecito,
           rowVersion: artigianoAnagraficaInModifica.rowVersion,
         });
       } else {
-        await window.sciuscia.call("anagrafiche.creaArtigiano", { nome, contatto, telefono, email, indirizzo });
+        await window.sciuscia.call("anagrafiche.creaArtigiano", { nome, contatto, telefono, email, indirizzo, giorniSollecito });
       }
       chiudiModaleArtigiano();
       await caricaArtigianiAnagrafica();
@@ -3148,11 +3200,13 @@
     document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
+    document.getElementById("nav-pa").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaAgenda.hidden = true;
     vistaPdr.hidden = true;
+    vistaPa.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     await apriDettaglioCommessa(orderId);
@@ -3164,11 +3218,13 @@
     document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
+    document.getElementById("nav-pa").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaAgenda.hidden = true;
     vistaPdr.hidden = true;
+    vistaPa.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     await apriDettaglioCommessa(orderId);
@@ -3297,6 +3353,264 @@
     apriModaleMessaggio("AVVISO_PRONTO", idsDaAvvisare);
   }
 
+  // --- Presso artigiani ---
+
+  async function caricaPa() {
+    nascondiErrore();
+    try {
+      paCache = await window.sciuscia.call("artigiani.pressoArtigiani");
+      renderPa();
+    } catch (errore) {
+      mostraErrore("Non è stato possibile caricare gli articoli presso gli artigiani: " + errore.message);
+    }
+  }
+
+  // Raggruppa le righe piatte (una per articolo+lavorazione esterna) per articolo, raccogliendo
+  // tutte le lavorazioni affidate in un unico elenco (specifica, sezione 7: "lavorazioni esterne
+  // affidate", al plurale), e calcola per ciascun articolo lo stato di ritardo/sollecito.
+  function costruisciArticoliPa(righe) {
+    const perArticolo = new Map();
+    for (const riga of righe) {
+      if (!perArticolo.has(riga.item.itemId)) {
+        perArticolo.set(riga.item.itemId, {
+          item: riga.item,
+          orderId: riga.orderId,
+          orderVisibleCode: riga.orderVisibleCode,
+          categoryName: riga.categoryName,
+          externalAssignmentId: riga.externalAssignmentId,
+          assignmentRowVersion: riga.assignmentRowVersion,
+          artisanId: riga.artisanId,
+          artisanName: riga.artisanName,
+          entrustedAt: riga.entrustedAt,
+          expectedReturnDate: riga.expectedReturnDate,
+          solicitAfterDays: riga.solicitAfterDays,
+          lavorazioni: [],
+        });
+      }
+      if (riga.externalWorkName) {
+        perArticolo.get(riga.item.itemId).lavorazioni.push(riga.externalWorkName);
+      }
+    }
+
+    const articoli = Array.from(perArticolo.values());
+    for (const articolo of articoli) {
+      const stato = calcolaStatoRitardoPa(articolo);
+      articolo.giorniRitardo = stato.giorniRitardo;
+      articolo.daSollecitare = stato.daSollecitare;
+    }
+    return articoli;
+  }
+
+  // Giorni di ritardo sulla data prevista di rientro (se indicata); in assenza di ritardo,
+  // "da sollecitare" se sono passati almeno i giorni di soglia dell'artigiano dall'affidamento
+  // (soglia facoltativa, specifica a ogni artigiano). Non cambia l'ordinamento richiesto dalla
+  // specifica: è solo un avviso aggiuntivo.
+  function calcolaStatoRitardoPa(articolo) {
+    const oggi = new Date();
+    oggi.setHours(0, 0, 0, 0);
+
+    let giorniRitardo = null;
+    if (articolo.expectedReturnDate) {
+      const scadenza = new Date(articolo.expectedReturnDate.substring(0, 10) + "T00:00:00");
+      const diffGiorni = Math.round((oggi - scadenza) / 86400000);
+      if (diffGiorni > 0) {
+        giorniRitardo = diffGiorni;
+      }
+    }
+
+    let daSollecitare = false;
+    if (!giorniRitardo && articolo.solicitAfterDays) {
+      const affidato = new Date(articolo.entrustedAt.substring(0, 10) + "T00:00:00");
+      const diffGiorni = Math.round((oggi - affidato) / 86400000);
+      if (diffGiorni >= articolo.solicitAfterDays) {
+        daSollecitare = true;
+      }
+    }
+
+    return { giorniRitardo, daSollecitare };
+  }
+
+  function renderPa() {
+    const contenuto = document.getElementById("pa-contenuto");
+    contenuto.innerHTML = "";
+
+    const articoli = costruisciArticoliPa(paCache);
+
+    const gruppiPerArtigiano = new Map();
+    for (const articolo of articoli) {
+      if (!gruppiPerArtigiano.has(articolo.artisanId)) {
+        gruppiPerArtigiano.set(articolo.artisanId, {
+          artisanId: articolo.artisanId,
+          artisanName: articolo.artisanName,
+          articoli: [],
+        });
+      }
+      gruppiPerArtigiano.get(articolo.artisanId).articoli.push(articolo);
+    }
+
+    const gruppi = Array.from(gruppiPerArtigiano.values());
+    gruppi.sort((a, b) => a.artisanName.localeCompare(b.artisanName, "it"));
+
+    // Ordinamento articoli (specifica, sezione 7): prima i ritardi (dal maggiore), poi la data
+    // prevista di rientro; gli articoli senza data prevista sono in fondo.
+    for (const gruppo of gruppi) {
+      gruppo.articoli.sort((a, b) => {
+        const aRitardo = a.giorniRitardo || 0;
+        const bRitardo = b.giorniRitardo || 0;
+        if (aRitardo !== bRitardo) {
+          return bRitardo - aRitardo;
+        }
+        if (!a.expectedReturnDate && !b.expectedReturnDate) {
+          return 0;
+        }
+        if (!a.expectedReturnDate) {
+          return 1;
+        }
+        if (!b.expectedReturnDate) {
+          return -1;
+        }
+        return a.expectedReturnDate.localeCompare(b.expectedReturnDate);
+      });
+    }
+
+    document.getElementById("pa-stato-vuoto").hidden = gruppi.length > 0;
+    for (const gruppo of gruppi) {
+      contenuto.appendChild(costruisciSchedaArtigianoGruppo(gruppo));
+    }
+  }
+
+  function costruisciSchedaArtigianoGruppo(gruppo) {
+    const scheda = document.createElement("div");
+    scheda.className = "pa-gruppo";
+
+    const intestazione = document.createElement("div");
+    intestazione.className = "pa-gruppo-intestazione";
+    intestazione.innerHTML =
+      '<div class="pa-gruppo-nome"><strong>' + escapeHtml(gruppo.artisanName) + "</strong></div>" +
+      '<span class="pa-gruppo-conteggio">' + gruppo.articoli.length +
+      (gruppo.articoli.length === 1 ? " articolo" : " articoli") + "</span>";
+    scheda.appendChild(intestazione);
+
+    const elencoArticoli = document.createElement("div");
+    elencoArticoli.className = "pa-gruppo-articoli";
+    for (const articolo of gruppo.articoli) {
+      elencoArticoli.appendChild(costruisciRigaArtigiano(articolo));
+    }
+    scheda.appendChild(elencoArticoli);
+
+    return scheda;
+  }
+
+  function costruisciRigaArtigiano(articolo) {
+    const senzaData = !articolo.expectedReturnDate;
+    const riga = document.createElement("button");
+    riga.type = "button";
+    riga.className = "pa-articolo-riga" +
+      (articolo.giorniRitardo ? " pa-articolo-ritardo" : "") +
+      (senzaData ? " pa-articolo-senza-data" : "");
+
+    const bollini = [];
+    if (articolo.giorniRitardo) {
+      bollini.push(
+        '<span class="badge arretrato">' + articolo.giorniRitardo +
+        (articolo.giorniRitardo === 1 ? " giorno di ritardo" : " giorni di ritardo") + "</span>");
+    }
+    if (articolo.daSollecitare) {
+      bollini.push('<span class="badge sollecito">Da sollecitare</span>');
+    }
+
+    const dataTesto = senzaData ? "Senza data prevista" : formattaDataItaliana(articolo.expectedReturnDate);
+    const lavorazioniTesto = articolo.lavorazioni.length > 0
+      ? articolo.lavorazioni.join(", ")
+      : "Nessuna lavorazione esterna indicata";
+
+    riga.innerHTML =
+      '<div class="pa-articolo-info">' +
+      "<strong>" + escapeHtml(articolo.item.visibleCode) + "</strong> — " +
+      escapeHtml(articolo.categoryName) + " — " + escapeHtml(articolo.item.description) + " " +
+      bollini.join(" ") +
+      '<div class="pa-articolo-lavorazioni">' + escapeHtml(lavorazioniTesto) + "</div>" +
+      "</div>" +
+      '<div class="pa-articolo-destra"><span class="pa-articolo-data">' + escapeHtml(dataTesto) + "</span></div>";
+
+    riga.addEventListener("click", () => apriAnteprimaArtigiani(articolo));
+    return riga;
+  }
+
+  async function apriAnteprimaArtigiani(articolo) {
+    nascondiErrore();
+    anteprimaArtigianiCorrente = articolo;
+    document.getElementById("anteprima-artigiani-titolo").textContent =
+      articolo.item.visibleCode + " — " + articolo.categoryName + " — " + articolo.artisanName;
+    document.getElementById("anteprima-artigiani-sottotitolo").textContent =
+      articolo.orderVisibleCode + " · affidato il " + formattaDataItaliana(articolo.entrustedAt.substring(0, 10));
+    document.getElementById("anteprima-artigiani-lavorazioni").textContent =
+      articolo.lavorazioni.length > 0 ? articolo.lavorazioni.join(", ") : "Nessuna lavorazione esterna indicata.";
+    document.getElementById("anteprima-artigiani-data-rientro").value = new Date().toISOString().substring(0, 10);
+
+    const contenitoreFoto = document.getElementById("anteprima-artigiani-foto");
+    contenitoreFoto.innerHTML = "";
+    document.getElementById("modal-anteprima-artigiani").hidden = false;
+
+    try {
+      const dettaglio = await window.sciuscia.call("commesse.dettaglio", { commessaId: articolo.orderId });
+      const dettaglioArticolo = (dettaglio.items || []).find((d) => d.item.itemId === articolo.item.itemId);
+      if (dettaglioArticolo) {
+        anteprimaArtigianiCorrente = { ...articolo, item: dettaglioArticolo.item };
+        contenitoreFoto.appendChild(costruisciGalleriaFotoSoloLettura(dettaglioArticolo.photos || []));
+      }
+    } catch (errore) {
+      mostraErrore("Non è stato possibile caricare le fotografie: " + errore.message);
+    }
+  }
+
+  function chiudiModaleAnteprimaArtigiani() {
+    document.getElementById("modal-anteprima-artigiani").hidden = true;
+    anteprimaArtigianiCorrente = null;
+  }
+
+  async function apriCommessaDaArtigiani(orderId, itemId) {
+    chiudiModaleAnteprimaArtigiani();
+    articoloDaEvidenziareId = itemId;
+    document.getElementById("nav-commesse").classList.add("active");
+    document.getElementById("nav-home").classList.remove("active");
+    document.getElementById("nav-agenda").classList.remove("active");
+    document.getElementById("nav-pdr").classList.remove("active");
+    document.getElementById("nav-pa").classList.remove("active");
+    document.getElementById("nav-anagrafiche").classList.remove("active");
+    document.getElementById("nav-impostazioni").classList.remove("active");
+    vistaHome.hidden = true;
+    vistaAgenda.hidden = true;
+    vistaPdr.hidden = true;
+    vistaPa.hidden = true;
+    vistaAnagrafiche.hidden = true;
+    vistaImpostazioni.hidden = true;
+    await apriDettaglioCommessa(orderId);
+  }
+
+  // "Segna Rientrato" (specifica, sezione 7): la data propone oggi ma resta modificabile, per
+  // registrare un rientro avvenuto prima. Non cambia da solo lo stato di lavorazione
+  // dell'articolo: resta una scelta dell'operatore dal dettaglio della commessa.
+  async function segnaRientratoDaArtigiani() {
+    if (!anteprimaArtigianiCorrente) {
+      return;
+    }
+    nascondiErrore();
+    const articolo = anteprimaArtigianiCorrente;
+    const dataRientro = document.getElementById("anteprima-artigiani-data-rientro").value || null;
+    try {
+      await window.sciuscia.call("artigiani.segnaRientrato", {
+        affidamentoId: articolo.externalAssignmentId,
+        rowVersion: articolo.assignmentRowVersion,
+        dataRientro,
+      });
+      chiudiModaleAnteprimaArtigiani();
+      await caricaPa();
+    } catch (errore) {
+      mostraErrore("Non è stato possibile registrare il rientro: " + errore.message);
+    }
+  }
+
   async function segnaProntoDaAgenda() {
     if (!anteprimaAgendaCorrente) {
       return;
@@ -3351,6 +3665,13 @@
     }
   });
   document.getElementById("btn-segna-pronto-agenda").addEventListener("click", segnaProntoDaAgenda);
+  document.getElementById("btn-chiudi-anteprima-artigiani").addEventListener("click", chiudiModaleAnteprimaArtigiani);
+  document.getElementById("btn-apri-commessa-artigiani").addEventListener("click", () => {
+    if (anteprimaArtigianiCorrente) {
+      apriCommessaDaArtigiani(anteprimaArtigianiCorrente.orderId, anteprimaArtigianiCorrente.item.itemId);
+    }
+  });
+  document.getElementById("btn-segna-rientrato-artigiani").addEventListener("click", segnaRientratoDaArtigiani);
 
   // --- Consulta carico delle prossime settimane (specifica, sezione 3) ---
 

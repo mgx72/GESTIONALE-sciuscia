@@ -18,6 +18,7 @@ public sealed class OrdersRuntime
         Agenda = new AgendaService(paths);
         Home = new HomeService(paths);
         ReadyPickups = new ReadyPickupService(paths);
+        ArtisanWork = new ArtisanWorkService(paths);
     }
 
     public OrderService Orders { get; }
@@ -28,4 +29,5 @@ public sealed class OrdersRuntime
     public AgendaService Agenda { get; }
     public HomeService Home { get; }
     public ReadyPickupService ReadyPickups { get; }
+    public ArtisanWorkService ArtisanWork { get; }
 }

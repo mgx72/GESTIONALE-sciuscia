@@ -142,6 +142,9 @@ CREATE TABLE artisans (
     email               TEXT,
     address             TEXT,
     notes               TEXT,
+    -- Dopo quanti giorni dall'affidamento questo artigiano va sollecitato se non ha ancora
+    -- restituito l'articolo (facoltativo: ogni artigiano può avere una soglia diversa, o nessuna).
+    solicit_after_days  INTEGER CHECK (solicit_after_days IS NULL OR solicit_after_days > 0),
     active              INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
     created_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     updated_at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
@@ -605,6 +608,7 @@ BEGIN SELECT RAISE(ABORT, 'La cronologia non può essere eliminata'); END;
 
 INSERT INTO schema_migrations(version, name) VALUES (1, 'schema_solo_lab_iniziale');
 INSERT INTO schema_migrations(version, name) VALUES (2, 'tempo_lavorazioni_e_capacita_giornaliera');
+INSERT INTO schema_migrations(version, name) VALUES (3, 'giorni_sollecito_artigiani');
 
 COMMIT;
 

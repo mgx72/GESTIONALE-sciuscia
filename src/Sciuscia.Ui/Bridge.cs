@@ -72,6 +72,8 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                 "agenda.elenco" => await AgendaElencoAsync(),
                 "home.riepilogo" => await runtime.Orders.Home.GetRiepilogoAsync(),
                 "ritiri.prontiDaRitirare" => await runtime.Orders.ReadyPickups.ListAsync(),
+                "artigiani.pressoArtigiani" => await runtime.Orders.ArtisanWork.ListAsync(),
+                "artigiani.segnaRientrato" => await SegnaRientratoAsync(request.Payload),
                 "anagrafiche.artigiani" => await runtime.Registry.Artisans.ListAsync(OptionalBool(request.Payload, "includiInattive") ?? false),
                 "anagrafiche.creaArtigiano" => await CreaArtigianoAsync(request.Payload),
                 "anagrafiche.modificaArtigiano" => await ModificaArtigianoAsync(request.Payload),
@@ -318,7 +320,8 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         var telefono = OptionalString(payload, "telefono");
         var email = OptionalString(payload, "email");
         var indirizzo = OptionalString(payload, "indirizzo");
-        return await runtime.Registry.Artisans.CreateAsync(nome, contatto, telefono, email, indirizzo);
+        var giorniSollecito = OptionalInt(payload, "giorniSollecito");
+        return await runtime.Registry.Artisans.CreateAsync(nome, contatto, telefono, email, indirizzo, giorniSollecito);
     }
 
     private async Task<ArtisanRecord> ModificaArtigianoAsync(JsonElement payload)
@@ -330,7 +333,8 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         var email = OptionalString(payload, "email");
         var indirizzo = OptionalString(payload, "indirizzo");
         var rowVersion = RequireInt(payload, "rowVersion");
-        await runtime.Registry.Artisans.UpdateAsync(artigianoId, nome, contatto, telefono, email, indirizzo, rowVersion);
+        var giorniSollecito = OptionalInt(payload, "giorniSollecito");
+        await runtime.Registry.Artisans.UpdateAsync(artigianoId, nome, contatto, telefono, email, indirizzo, rowVersion, giorniSollecito);
         var artigiani = await runtime.Registry.Artisans.ListAsync(includeInactive: true);
         return artigiani.First(a => a.ArtisanId == artigianoId);
     }
@@ -726,6 +730,25 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         return await runtime.Operations.Pickups.CreateAsync(orderId, articoli, notes: note);
     }
 
+    /// <summary>
+    /// Registra il rientro di un articolo affidato a un artigiano (specifica, sezione 7, comando
+    /// "Segna Rientrato"). La data propone oggi ma resta modificabile, per registrare un rientro
+    /// avvenuto prima; questo comando non cambia da solo lo stato di lavorazione dell'articolo,
+    /// che resta una scelta dell'operatore dal dettaglio della commessa, come già per tutti gli
+    /// altri cambi di stato.
+    /// </summary>
+    private async Task<object> SegnaRientratoAsync(JsonElement payload)
+    {
+        var affidamentoId = RequireString(payload, "affidamentoId");
+        var rowVersion = RequireInt(payload, "rowVersion");
+        var dataRientro = OptionalDate(payload, "dataRientro");
+        DateTimeOffset? rientro = dataRientro.HasValue
+            ? new DateTimeOffset(dataRientro.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
+            : null;
+        await runtime.Orders.ExternalAssignments.MarkReturnedAsync(affidamentoId, rientro, rowVersion);
+        return new { ok = true };
+    }
+
     /// <summary>Registra un messaggio inviato al cliente, con il testo effettivo congelato al momento dell'invio.</summary>
     private async Task<MessageRecord> InviaMessaggioAsync(JsonElement payload)
     {
@@ -903,6 +926,23 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
     private static DateOnly RequireDate(JsonElement payload, string propertyName)
     {
         var testo = RequireString(payload, propertyName);
+        if (DateOnly.TryParse(testo, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var data))
+        {
+            return data;
+        }
+
+        throw new ArgumentException($"Data non valida: {propertyName}.");
+    }
+
+    /// <summary>Legge una data facoltativa nel formato "AAAA-MM-GG"; assente o vuota restituisce null.</summary>
+    private static DateOnly? OptionalDate(JsonElement payload, string propertyName)
+    {
+        var testo = OptionalString(payload, propertyName);
+        if (string.IsNullOrWhiteSpace(testo))
+        {
+            return null;
+        }
+
         if (DateOnly.TryParse(testo, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var data))
         {
             return data;

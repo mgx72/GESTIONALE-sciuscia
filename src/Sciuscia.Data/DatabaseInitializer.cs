@@ -153,6 +153,30 @@ public sealed class DatabaseInitializer(
                 throw;
             }
         }
+
+        if (currentVersion < 3)
+        {
+            await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                await ExecuteMigrationStepAsync(
+                    connection, transaction,
+                    "ALTER TABLE artisans ADD COLUMN solicit_after_days INTEGER CHECK (solicit_after_days IS NULL OR solicit_after_days > 0);",
+                    cancellationToken);
+
+                await ExecuteMigrationStepAsync(
+                    connection, transaction,
+                    "INSERT INTO schema_migrations(version, name) VALUES (3, 'giorni_sollecito_artigiani');",
+                    cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
     }
 
     private static async Task<int> GetCurrentSchemaVersionAsync(SqliteConnection connection, CancellationToken cancellationToken)

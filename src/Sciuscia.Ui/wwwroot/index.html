@@ -13,6 +13,7 @@
       <a class="nav-item" data-view="commesse" id="nav-commesse">Commesse</a>
       <a class="nav-item" data-view="agenda" id="nav-agenda">Agenda lavori</a>
       <a class="nav-item" data-view="pdr" id="nav-pdr">Pronti da ritirare</a>
+      <a class="nav-item" data-view="pa" id="nav-pa">Presso artigiani</a>
       <a class="nav-item" data-view="anagrafiche" id="nav-anagrafiche">Anagrafiche</a>
       <a class="nav-item" data-view="impostazioni" id="nav-impostazioni">Impostazioni</a>
     </nav>
@@ -223,7 +224,7 @@
           </div>
           <div class="panel">
             <table>
-              <thead><tr><th>Nome</th><th>Telefono</th><th>Email</th><th>Stato</th><th></th></tr></thead>
+              <thead><tr><th>Nome</th><th>Telefono</th><th>Email</th><th>Sollecito</th><th>Stato</th><th></th></tr></thead>
               <tbody id="corpo-tabella-artigiani-anagrafica"></tbody>
             </table>
           </div>
@@ -286,6 +287,18 @@
         </p>
         <div id="pdr-contenuto"></div>
         <div id="pdr-stato-vuoto" class="empty-state" hidden>Nessun articolo pronto da ritirare al momento.</div>
+      </div>
+
+      <div id="view-pa" hidden>
+        <div class="main-header">
+          <h2>Presso artigiani</h2>
+          <button type="button" id="btn-aggiorna-pa">Aggiorna</button>
+        </div>
+        <p class="subtitle-inline">
+          Articoli affidati agli artigiani esterni, raggruppati per artigiano. I ritardi sulla data prevista di rientro compaiono prima; gli articoli senza data prevista sono in fondo, evidenziati.
+        </p>
+        <div id="pa-contenuto"></div>
+        <div id="pa-stato-vuoto" class="empty-state" hidden>Nessun articolo attualmente presso un artigiano.</div>
       </div>
 
       <div id="view-impostazioni" hidden>
@@ -396,6 +409,25 @@
         <button type="button" id="btn-chiudi-anteprima-agenda">Chiudi</button>
         <button type="button" id="btn-apri-commessa-agenda">Apri commessa</button>
         <button type="button" id="btn-segna-pronto-agenda" class="primary">Segna pronto</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-anteprima-artigiani" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3 id="anteprima-artigiani-titolo"></h3>
+      <p class="subtitle" id="anteprima-artigiani-sottotitolo"></p>
+      <div id="anteprima-artigiani-lavorazioni"></div>
+      <div class="field">
+        <label for="anteprima-artigiani-data-rientro">Data di rientro</label>
+        <input type="date" id="anteprima-artigiani-data-rientro" />
+        <p class="hint">Proposta la data di oggi: modificala se il rientro è avvenuto prima.</p>
+      </div>
+      <div id="anteprima-artigiani-foto"></div>
+      <div class="modal-actions">
+        <button type="button" id="btn-chiudi-anteprima-artigiani">Chiudi</button>
+        <button type="button" id="btn-apri-commessa-artigiani">Apri commessa</button>
+        <button type="button" id="btn-segna-rientrato-artigiani" class="primary">Segna rientrato</button>
       </div>
     </div>
   </div>
@@ -811,6 +843,11 @@
       <div class="field">
         <label for="artigiano-anagrafica-indirizzo">Indirizzo</label>
         <input type="text" id="artigiano-anagrafica-indirizzo" />
+      </div>
+      <div class="field">
+        <label for="artigiano-anagrafica-sollecito">Giorni di sollecito</label>
+        <input type="number" step="1" min="1" id="artigiano-anagrafica-sollecito" placeholder="Es. 15" />
+        <p class="hint">Facoltativo. Dopo questi giorni senza rientro, l'articolo viene segnalato "Da sollecitare" in Presso artigiani. Ogni artigiano può avere una soglia diversa; se lo lasci vuoto, questo artigiano non viene segnalato.</p>
       </div>
       <div class="modal-actions">
         <button type="button" id="btn-annulla-artigiano-anagrafica">Annulla</button>

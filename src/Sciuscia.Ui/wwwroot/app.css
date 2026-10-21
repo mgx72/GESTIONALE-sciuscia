@@ -1151,3 +1151,96 @@ button.pericoloso:hover {
   color: var(--danger);
   font-weight: 700;
 }
+
+/* --- Presso artigiani (specifica, sezione 7) --- */
+
+.badge.sollecito {
+  background: #fff3e0;
+  color: #b36b00;
+  margin-left: 8px;
+}
+
+.pa-gruppo {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+.pa-gruppo-intestazione {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pa-gruppo-nome {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pa-gruppo-conteggio {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.pa-gruppo-articoli {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+}
+
+.pa-articolo-riga {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 0;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.pa-articolo-riga:last-child {
+  border-bottom: none;
+}
+
+.pa-articolo-riga:hover {
+  color: var(--primary);
+}
+
+.pa-articolo-ritardo {
+  border-left: 3px solid var(--danger);
+  padding-left: 8px;
+}
+
+.pa-articolo-senza-data {
+  color: var(--text-muted);
+}
+
+.pa-articolo-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pa-articolo-lavorazioni {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.pa-articolo-destra {
+  white-space: nowrap;
+}
+
+.pa-articolo-data {
+  color: var(--text-muted);
+  font-size: 13px;
+}
