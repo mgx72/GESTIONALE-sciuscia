@@ -742,10 +742,7 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         var affidamentoId = RequireString(payload, "affidamentoId");
         var rowVersion = RequireInt(payload, "rowVersion");
         var dataRientro = OptionalDate(payload, "dataRientro");
-        DateTimeOffset? rientro = dataRientro.HasValue
-            ? new DateTimeOffset(dataRientro.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
-            : null;
-        await runtime.Orders.ExternalAssignments.MarkReturnedAsync(affidamentoId, rientro, rowVersion);
+        await runtime.Orders.ExternalAssignments.MarkReturnedOnDateAsync(affidamentoId, dataRientro, rowVersion);
         return new { ok = true };
     }
 
@@ -1006,3 +1003,4 @@ internal sealed record BridgeResponse(
     [property: JsonPropertyName("requestId")] string? RequestId,
     [property: JsonPropertyName("result")] object? Result,
     [property: JsonPropertyName("error")] string? Error);
+

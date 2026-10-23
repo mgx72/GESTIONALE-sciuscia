@@ -3537,16 +3537,26 @@
     return riga;
   }
 
+  function dataCalendarioItaliana(istante = new Date()) {
+    const parti = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(istante);
+    const valore = (tipo) => parti.find((parte) => parte.type === tipo).value;
+    return valore("year") + "-" + valore("month") + "-" + valore("day");
+  }
+
   async function apriAnteprimaArtigiani(articolo) {
     nascondiErrore();
     anteprimaArtigianiCorrente = articolo;
     document.getElementById("anteprima-artigiani-titolo").textContent =
       articolo.item.visibleCode + " — " + articolo.categoryName + " — " + articolo.artisanName;
     document.getElementById("anteprima-artigiani-sottotitolo").textContent =
-      articolo.orderVisibleCode + " · affidato il " + formattaDataItaliana(articolo.entrustedAt.substring(0, 10));
+      articolo.orderVisibleCode + " · affidato il " + formattaDataItaliana(dataCalendarioItaliana(new Date(articolo.entrustedAt)));
     document.getElementById("anteprima-artigiani-lavorazioni").textContent =
       articolo.lavorazioni.length > 0 ? articolo.lavorazioni.join(", ") : "Nessuna lavorazione esterna indicata.";
-    document.getElementById("anteprima-artigiani-data-rientro").value = new Date().toISOString().substring(0, 10);
+    const campoDataRientro = document.getElementById("anteprima-artigiani-data-rientro");
+    campoDataRientro.value = dataCalendarioItaliana();
+    campoDataRientro.min = dataCalendarioItaliana(new Date(articolo.entrustedAt));
 
     const contenitoreFoto = document.getElementById("anteprima-artigiani-foto");
     contenitoreFoto.innerHTML = "";
@@ -3893,3 +3903,4 @@
 
   caricaHome();
 })();
+

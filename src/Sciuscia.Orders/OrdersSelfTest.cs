@@ -97,6 +97,7 @@ public static class OrdersSelfTest
             await orders.Items.SetWorkflowStatusAsync(item2.ItemId, "PRONTO_DA_AVVISARE", item2.RowVersion);
 
             await orders.ExternalAssignments.MarkReturnedAsync(assignment.ExternalAssignmentId, null, assignment.RowVersion);
+            await VerifyReturnDatesAsync(orders.ExternalAssignments, item2.ItemId, artisanId);
 
             // --- Totali della commessa (vista v_order_financials) ---
             var financials = await orders.Orders.GetFinancialsAsync(order.OrderId);
@@ -138,6 +139,71 @@ public static class OrdersSelfTest
                 Directory.Delete(testRoot, recursive: true);
             }
         }
+    }
+
+    private static async Task VerifyReturnDatesAsync(ExternalAssignmentService service, string itemId, string artisanId)
+    {
+        // Il risultato atteso è scritto esplicitamente: nessuna dipendenza dal fuso del runner.
+        (string Entrusted, string ReturnedOn, string Expected)[] cases =
+        [
+            ("2026-10-21T13:45:00.123Z", "2026-10-21", "2026-10-21T13:45:00.123Z"),
+            ("2026-01-21T23:30:00.000Z", "2026-01-22", "2026-01-21T23:30:00.000Z"),
+            ("2026-07-21T22:30:00.000Z", "2026-07-22", "2026-07-21T22:30:00.000Z"),
+            ("2026-01-21T13:45:00.000Z", "2026-01-22", "2026-01-21T23:00:00.000Z"),
+            ("2026-07-21T13:45:00.000Z", "2026-07-22", "2026-07-21T22:00:00.000Z"),
+            // Il cambio d'ora avviene dopo mezzanotte: conta l'offset all'inizio del giorno.
+            ("2026-03-28T12:00:00.000Z", "2026-03-29", "2026-03-28T23:00:00.000Z"),
+            ("2026-03-28T12:00:00.000Z", "2026-03-30", "2026-03-29T22:00:00.000Z"),
+            ("2026-10-24T12:00:00.000Z", "2026-10-25", "2026-10-24T22:00:00.000Z"),
+            ("2026-10-24T12:00:00.000Z", "2026-10-26", "2026-10-25T23:00:00.000Z"),
+        ];
+        foreach (var (entrusted, returnedOn, expected) in cases)
+        {
+            var assignment = await service.AssignAsync(itemId, artisanId,
+                DateTimeOffset.Parse(entrusted, System.Globalization.CultureInfo.InvariantCulture));
+            await service.MarkReturnedOnDateAsync(assignment.ExternalAssignmentId,
+                DateOnly.ParseExact(returnedOn, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), assignment.RowVersion);
+            var saved = await service.FindAsync(assignment.ExternalAssignmentId)
+                ?? throw new InvalidDataException("Affidamento di prova non trovato.");
+            if (saved.ReturnedAt != expected || saved.RowVersion != assignment.RowVersion + 1 ||
+                (await service.ListActiveByArtisanAsync(artisanId)).Any(a => a.ExternalAssignmentId == assignment.ExternalAssignmentId))
+                throw new InvalidDataException($"Rientro {returnedOn}: atteso {expected}, ottenuto {saved.ReturnedAt}.");
+        }
+
+        // Il 21 UTC è già il 22 in Italia: il 21 va rifiutato anche se coincide con la data UTC.
+        var invalid = await service.AssignAsync(itemId, artisanId,
+            new DateTimeOffset(2026, 10, 21, 22, 30, 0, TimeSpan.Zero));
+        foreach (var day in new[] { new DateOnly(2026, 10, 20), new DateOnly(2026, 10, 21) })
+        {
+            var rejected = false;
+            try
+            {
+                await service.MarkReturnedOnDateAsync(invalid.ExternalAssignmentId, day, invalid.RowVersion);
+            }
+            catch (InvalidOperationException) { rejected = true; }
+            var saved = await service.FindAsync(invalid.ExternalAssignmentId);
+            if (!rejected || saved is null || saved.ReturnedAt != null || saved.RowVersion != invalid.RowVersion)
+                throw new InvalidDataException("Una data precedente deve essere rifiutata senza modifiche.");
+        }
+
+        // L'API per istanti precisi conserva il vincolo cronologico, anche nello stesso giorno.
+        var instantRejected = false;
+        try
+        {
+            await service.MarkReturnedAsync(invalid.ExternalAssignmentId,
+                new DateTimeOffset(2026, 10, 21, 22, 29, 0, TimeSpan.Zero), invalid.RowVersion);
+        }
+        catch (InvalidOperationException) { instantRejected = true; }
+        if (!instantRejected) throw new InvalidDataException("Istante precedente all'affidamento accettato.");
+
+        await service.MarkReturnedOnDateAsync(invalid.ExternalAssignmentId, new DateOnly(2026, 10, 22), invalid.RowVersion);
+        var conflict = false;
+        try
+        {
+            await service.MarkReturnedOnDateAsync(invalid.ExternalAssignmentId, new DateOnly(2026, 10, 23), invalid.RowVersion);
+        }
+        catch (ConcurrencyConflictException) { conflict = true; }
+        if (!conflict) throw new InvalidDataException("Versione obsoleta accettata per il rientro.");
     }
 
     /// <summary>
@@ -185,3 +251,4 @@ public static class OrdersSelfTest
         return (customerId, categoryId, brandId, artisanId);
     }
 }
+
