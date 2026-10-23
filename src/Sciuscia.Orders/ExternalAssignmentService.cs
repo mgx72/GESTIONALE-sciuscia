@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Sciuscia.Foundations;
+using System.Globalization;
 
 namespace Sciuscia.Orders;
 
@@ -31,6 +32,9 @@ public sealed record ExternalAssignmentDetail(
 /// </summary>
 public sealed class ExternalAssignmentService(AppPaths paths, SemaphoreSlim maintenanceGate)
 {
+    private static readonly TimeZoneInfo ItalianTimeZone = TimeZoneInfo.FindSystemTimeZoneById(
+        OperatingSystem.IsWindows() ? "W. Europe Standard Time" : "Europe/Rome");
+
     public async Task<ExternalAssignmentRecord> AssignAsync(
         string itemId,
         string artisanId,
@@ -76,14 +80,47 @@ public sealed class ExternalAssignmentService(AppPaths paths, SemaphoreSlim main
         }
     }
 
-    public async Task MarkReturnedAsync(string assignmentId, DateTimeOffset? returnedAt, int expectedRowVersion, CancellationToken cancellationToken = default)
-    {
-        var returnedAtIso = (returnedAt ?? DateTimeOffset.Now).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+    public Task MarkReturnedAsync(string assignmentId, DateTimeOffset? returnedAt, int expectedRowVersion, CancellationToken cancellationToken = default)
+        => MarkReturnedCoreAsync(assignmentId, returnedAt, null, expectedRowVersion, cancellationToken);
 
+    /// <summary>
+    /// La data di calendario è italiana, indipendentemente dal fuso del computer.
+    /// Poiché l'ora non è nota, si conserva il primo istante compatibile con la data e
+    /// l'affidamento: inizio del giorno italiano, oppure affidamento se nello stesso giorno.
+    /// Una data nulla mantiene il significato di rientro all'istante corrente.
+    /// </summary>
+    public Task MarkReturnedOnDateAsync(string assignmentId, DateOnly? returnedOn, int expectedRowVersion, CancellationToken cancellationToken = default)
+        => MarkReturnedCoreAsync(assignmentId, null, returnedOn, expectedRowVersion, cancellationToken);
+
+    private async Task MarkReturnedCoreAsync(string assignmentId, DateTimeOffset? returnedAt, DateOnly? returnedOn, int expectedRowVersion, CancellationToken cancellationToken)
+    {
         await maintenanceGate.WaitAsync(cancellationToken);
         try
         {
             await using var connection = await DatabaseInitializer.OpenReadyConnectionAsync(paths.DatabasePath, cancellationToken: cancellationToken);
+            if (returnedOn.HasValue)
+            {
+                await using var read = connection.CreateCommand();
+                read.CommandText = "SELECT entrusted_at FROM external_assignments WHERE external_assignment_id = $id AND row_version = $expected;";
+                read.Parameters.AddWithValue("$id", assignmentId);
+                read.Parameters.AddWithValue("$expected", expectedRowVersion);
+                var entrustedAtIso = await read.ExecuteScalarAsync(cancellationToken) as string
+                    ?? throw new ConcurrencyConflictException("Affidamento esterno");
+                var entrustedAt = DateTimeOffset.Parse(entrustedAtIso, CultureInfo.InvariantCulture);
+                var entrustedOn = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(entrustedAt, ItalianTimeZone).DateTime);
+                if (returnedOn.Value < entrustedOn)
+                {
+                    throw new InvalidOperationException("La data di rientro non può essere precedente a quella di affidamento.");
+                }
+
+                returnedAt = returnedOn.Value == entrustedOn
+                    ? entrustedAt
+                    : new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(
+                        returnedOn.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified), ItalianTimeZone));
+            }
+
+            var returnedAtIso = (returnedAt ?? DateTimeOffset.UtcNow).ToUniversalTime()
+                .ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
             await using var command = connection.CreateCommand();
             command.CommandText =
                 """
@@ -195,3 +232,4 @@ public sealed class ExternalAssignmentService(AppPaths paths, SemaphoreSlim main
         return results;
     }
 }
+
