@@ -12,6 +12,7 @@ public sealed record ArtisanWorkRow(
     ItemRecord Item,
     string OrderId,
     string OrderVisibleCode,
+    string CustomerName,
     string CategoryName,
     string ExternalAssignmentId,
     int AssignmentRowVersion,
@@ -39,6 +40,7 @@ public sealed class ArtisanWorkService(AppPaths paths)
             SELECT i.item_id, i.order_id, i.item_sequence, i.visible_code, i.category_id, i.brand_id, i.description,
                    i.due_date, i.is_urgent, i.is_priority, i.workflow_status, i.label_revision, i.row_version,
                    o.visible_code AS order_visible_code,
+                   trim(c.surname || ' ' || COALESCE(c.first_name, '')) AS customer_name,
                    cat.name AS category_name,
                    ea.external_assignment_id, ea.row_version AS assignment_row_version,
                    a.artisan_id, a.display_name AS artisan_name,
@@ -46,6 +48,7 @@ public sealed class ArtisanWorkService(AppPaths paths)
                    iw.applied_name
             FROM items i
             JOIN orders o ON o.order_id = i.order_id
+            JOIN customers c ON c.customer_id = o.customer_id
             JOIN external_assignments ea ON ea.item_id = i.item_id AND ea.returned_at IS NULL AND ea.canceled_at IS NULL
             JOIN artisans a ON a.artisan_id = ea.artisan_id
             JOIN categories cat ON cat.category_id = i.category_id
@@ -67,11 +70,12 @@ public sealed class ArtisanWorkService(AppPaths paths)
 
             results.Add(new ArtisanWorkRow(
                 item, reader.GetString(1), reader.GetString(13), reader.GetString(14),
-                reader.GetString(15), reader.GetInt32(16),
-                reader.GetString(17), reader.GetString(18),
-                reader.GetString(19), reader.IsDBNull(20) ? null : reader.GetString(20),
-                reader.IsDBNull(21) ? null : reader.GetInt32(21),
-                reader.IsDBNull(22) ? null : reader.GetString(22)));
+                reader.GetString(15),
+                reader.GetString(16), reader.GetInt32(17),
+                reader.GetString(18), reader.GetString(19),
+                reader.GetString(20), reader.IsDBNull(21) ? null : reader.GetString(21),
+                reader.IsDBNull(22) ? null : reader.GetInt32(22),
+                reader.IsDBNull(23) ? null : reader.GetString(23)));
         }
 
         return results;

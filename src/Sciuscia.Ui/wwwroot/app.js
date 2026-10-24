@@ -3376,6 +3376,7 @@
           item: riga.item,
           orderId: riga.orderId,
           orderVisibleCode: riga.orderVisibleCode,
+          customerName: riga.customerName,
           categoryName: riga.categoryName,
           externalAssignmentId: riga.externalAssignmentId,
           assignmentRowVersion: riga.assignmentRowVersion,
@@ -3529,6 +3530,7 @@
       "<strong>" + escapeHtml(articolo.item.visibleCode) + "</strong> — " +
       escapeHtml(articolo.categoryName) + " — " + escapeHtml(articolo.item.description) + " " +
       bollini.join(" ") +
+      '<div class="pa-articolo-cliente">' + escapeHtml(articolo.customerName) + "</div>" +
       '<div class="pa-articolo-lavorazioni">' + escapeHtml(lavorazioniTesto) + "</div>" +
       "</div>" +
       '<div class="pa-articolo-destra"><span class="pa-articolo-data">' + escapeHtml(dataTesto) + "</span></div>";
@@ -3543,7 +3545,8 @@
     document.getElementById("anteprima-artigiani-titolo").textContent =
       articolo.item.visibleCode + " — " + articolo.categoryName + " — " + articolo.artisanName;
     document.getElementById("anteprima-artigiani-sottotitolo").textContent =
-      articolo.orderVisibleCode + " · affidato il " + formattaDataItaliana(articolo.entrustedAt.substring(0, 10));
+      articolo.orderVisibleCode + " · " + articolo.customerName +
+      " · affidato il " + formattaDataItaliana(articolo.entrustedAt.substring(0, 10));
     document.getElementById("anteprima-artigiani-lavorazioni").textContent =
       articolo.lavorazioni.length > 0 ? articolo.lavorazioni.join(", ") : "Nessuna lavorazione esterna indicata.";
     document.getElementById("anteprima-artigiani-data-rientro").value = new Date().toISOString().substring(0, 10);
@@ -3743,7 +3746,7 @@
       for (const giorno of giorniCalendario || []) {
         corpo.appendChild(costruisciRigaCarico(giorno, carichiPerGiorno.get(giorno.date)));
       }
-      costruisciGraficoCarico(giorniCalendario || [], carichiPerGiorno, "carico-grafico", capacita.capacitaGiornalieraMinuti);
+      costruisciGraficoCarico(giorniCalendario || [], carichiPerGiorno, "carico-grafico", capacita.capacitaGiornalieraMinuti, scegliDataCarico);
     } catch (errore) {
       mostraErrore("Non è stato possibile consultare il carico: " + errore.message);
     }
@@ -3780,12 +3783,17 @@
   /// Un grafico a barre semplice (senza librerie esterne), un po' com'è già stata scritta
   /// l'importazione Excel: ogni colonna è un giorno, l'altezza è proporzionale al numero di
   /// articoli già previsti quel giorno, il colore segue l'esito del giorno (lavorativo, mezza
-  /// giornata, chiuso). Se il tempo previsto delle lavorazioni (quando impostato nel Listino)
-  /// supera la capacità giornaliera di quel giorno, la colonna viene segnalata chiaramente
-  /// (barra e numero in rosso, con un'icona di avviso): è solo un segnale, non impedisce nulla.
-  /// Stessa funzione usata sia da "Consulta carico" sia dall'Agenda lavori, passando il
-  /// contenitore giusto in `containerId`.
-  function costruisciGraficoCarico(giorniCalendario, carichiPerGiorno, containerId, capacitaGiornalieraMinuti) {
+  /// giornata, chiuso). I giorni di chiusura (e le mezze giornate) sono evidenziati su tutta la
+  /// colonna, non solo sulla barra, così si riconoscono a colpo d'occhio anche quando non ci sono
+  /// articoli previsti quel giorno (altrimenti la barra sarebbe troppo piccola per notarla). Se il
+  /// tempo previsto delle lavorazioni (quando impostato nel Listino) supera la capacità giornaliera
+  /// di quel giorno, la colonna viene segnalata chiaramente (barra e numero in rosso, con un'icona
+  /// di avviso): è solo un segnale, non impedisce nulla. Stessa funzione usata sia da "Consulta
+  /// carico" sia dall'Agenda lavori, passando il contenitore giusto in `containerId`. Se viene
+  /// passato `onDayClick`, ogni colonna diventa cliccabile per scegliere direttamente quella data
+  /// (usato da "Consulta carico", dove ha senso scegliere una data; l'Agenda lavori resta di sola
+  /// consultazione e non passa questo argomento).
+  function costruisciGraficoCarico(giorniCalendario, carichiPerGiorno, containerId, capacitaGiornalieraMinuti, onDayClick) {
     const contenitore = document.getElementById(containerId);
     contenitore.innerHTML = "";
     if (giorniCalendario.length === 0) {
@@ -3799,19 +3807,24 @@
       const sogliaMinuti = (capacitaGiornalieraMinuti || 0) * giorno.capacityFactor;
       const superato = giorno.capacityFactor > 0 && sogliaMinuti > 0 && carico.minuti > sogliaMinuti;
       const classeBarra = (giorno.capacityFactor === 0 ? "chiuso" : giorno.capacityFactor === 0.5 ? "mezza" : "") + (superato ? " superato" : "");
+      const classeColonna = giorno.capacityFactor === 0 ? " giorno-chiuso" : giorno.capacityFactor === 0.5 ? " giorno-mezza" : "";
       const altezza = Math.max(2, Math.round((carico.totale / massimo) * 100));
       const motivoChiusura = giorno.capacityFactor < 1 ? ` (${giorno.reason})` : "";
       const oreTempoTesto = carico.minuti > 0 ? ` — tempo previsto ${formattaOreMinuti(carico.minuti)} su ${formattaOreMinuti(sogliaMinuti)} disponibili` : "";
-      const titolo = `${formattaDataItaliana(giorno.date)} — ${carico.totale} previst${carico.totale === 1 ? "o" : "i"}${oreTempoTesto}${motivoChiusura}${superato ? " — CARICO SUPERATO" : ""}`;
+      const istruzioneClick = onDayClick ? " — clicca per scegliere questa data" : "";
+      const titolo = `${formattaDataItaliana(giorno.date)} — ${carico.totale} previst${carico.totale === 1 ? "o" : "i"}${oreTempoTesto}${motivoChiusura}${superato ? " — CARICO SUPERATO" : ""}${istruzioneClick}`;
 
       const colonna = document.createElement("div");
-      colonna.className = "grafico-carico-colonna";
+      colonna.className = "grafico-carico-colonna" + classeColonna + (onDayClick ? " selezionabile" : "");
       colonna.title = titolo;
       colonna.innerHTML = `
         <div class="grafico-carico-valore${superato ? " superato" : ""}">${superato ? "⚠ " : ""}${carico.totale > 0 ? carico.totale : ""}</div>
         <div class="grafico-carico-traccia"><div class="grafico-carico-barra ${classeBarra}" style="height:${altezza}%"></div></div>
         <div class="grafico-carico-giorno">${new Date(giorno.date + "T00:00:00").getDate()}</div>
       `;
+      if (onDayClick) {
+        colonna.addEventListener("click", () => onDayClick(giorno));
+      }
       contenitore.appendChild(colonna);
     }
   }

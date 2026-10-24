@@ -992,6 +992,35 @@ button.pericoloso:hover {
   white-space: nowrap;
 }
 
+/* Giorni di chiusura/mezza giornata evidenziati su tutta la colonna (non solo sulla barra),
+   per riconoscerli a colpo d'occhio anche quando non ci sono articoli previsti quel giorno. */
+.grafico-carico-colonna.giorno-chiuso .grafico-carico-traccia {
+  background: var(--danger-bg);
+}
+
+.grafico-carico-colonna.giorno-chiuso .grafico-carico-giorno {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.grafico-carico-colonna.giorno-mezza .grafico-carico-traccia {
+  background: #fff3e0;
+}
+
+.grafico-carico-colonna.giorno-mezza .grafico-carico-giorno {
+  color: #b36b00;
+  font-weight: 700;
+}
+
+.grafico-carico-colonna.selezionabile {
+  cursor: pointer;
+}
+
+.grafico-carico-colonna.selezionabile:hover .grafico-carico-traccia {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
 /* --- Home --- */
 
 .griglia-home {
@@ -1229,6 +1258,10 @@ button.pericoloso:hover {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.pa-articolo-cliente {
+  font-size: 12px;
 }
 
 .pa-articolo-lavorazioni {
