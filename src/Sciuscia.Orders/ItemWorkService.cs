@@ -231,7 +231,7 @@ public sealed class ItemWorkService(AppPaths paths, SemaphoreSlim maintenanceGat
             SELECT item_work_id, item_id, source_work_type_id, external_assignment_id, applied_name, applied_label_text,
                    selected_band, price_status, price_cents, cost_cents, execution_type, approval_status, row_version,
                    canceled_at, cancellation_reason
-            FROM item_works WHERE item_id = $itemId ORDER BY sort_order;
+            FROM item_works WHERE item_id = $itemId ORDER BY sort_order, created_at;
             """;
         command.Parameters.AddWithValue("$itemId", itemId);
 

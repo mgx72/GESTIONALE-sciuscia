@@ -118,7 +118,7 @@ public sealed class DatabaseInitializer(
     /// recente, applicando soltanto le migrazioni non ancora eseguite (confrontando con
     /// schema_migrations). Un'installazione nuova parte già alla versione più recente tramite
     /// lo schema incorporato, quindi questo metodo per lei non fa nulla. Ogni migrazione è
-    /// additiva (nuove colonne, mai eliminazioni) e viene applicata in un'unica transazione
+    /// additiva (nuove colonne o viste ricalcolate, mai eliminazioni di dati) e viene applicata in un'unica transazione
     /// insieme alla sua riga di registrazione, così non resta mai a metà.
     /// </summary>
     private static async Task ApplyPendingMigrationsAsync(SqliteConnection connection, CancellationToken cancellationToken)
@@ -167,6 +167,66 @@ public sealed class DatabaseInitializer(
                 await ExecuteMigrationStepAsync(
                     connection, transaction,
                     "INSERT INTO schema_migrations(version, name) VALUES (3, 'giorni_sollecito_artigiani');",
+                    cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        if (currentVersion < 4)
+        {
+            // I totali della commessa non devono contare le lavorazioni di un articolo annullato:
+            // la vista dei totali viene ricreata con questa regola (nessun dato viene toccato).
+            await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                await ExecuteMigrationStepAsync(
+                    connection, transaction,
+                    "DROP VIEW IF EXISTS v_order_financials;",
+                    cancellationToken);
+
+                await ExecuteMigrationStepAsync(
+                    connection, transaction,
+                    """
+                    CREATE VIEW v_order_financials AS
+                    SELECT
+                        o.order_id,
+                        COALESCE(SUM(CASE
+                            WHEN iw.approval_status = 'APPROVATA'
+                             AND iw.canceled_at IS NULL
+                             AND iw.price_status = 'DEFINITO'
+                            THEN iw.price_cents ELSE 0 END), 0) AS total_cents,
+                        COALESCE((SELECT SUM(pe.amount_cents)
+                                  FROM payment_events pe
+                                  WHERE pe.order_id = o.order_id), 0) AS paid_cents,
+                        COALESCE(SUM(CASE
+                            WHEN iw.approval_status = 'APPROVATA'
+                             AND iw.canceled_at IS NULL
+                             AND iw.price_status = 'DEFINITO'
+                            THEN iw.price_cents ELSE 0 END), 0)
+                          - COALESCE((SELECT SUM(pe.amount_cents)
+                                      FROM payment_events pe
+                                      WHERE pe.order_id = o.order_id), 0) AS balance_cents,
+                        SUM(CASE
+                            WHEN iw.approval_status <> 'RIFIUTATA'
+                             AND iw.canceled_at IS NULL
+                             AND iw.price_status = 'DA_DEFINIRE'
+                            THEN 1 ELSE 0 END) AS undefined_price_count
+                    FROM orders o
+                    LEFT JOIN items i ON i.order_id = o.order_id AND i.workflow_status <> 'ANNULLATO'
+                    LEFT JOIN item_works iw ON iw.item_id = i.item_id
+                    GROUP BY o.order_id;
+                    """,
+                    cancellationToken);
+
+                await ExecuteMigrationStepAsync(
+                    connection, transaction,
+                    "INSERT INTO schema_migrations(version, name) VALUES (4, 'totali_senza_articoli_annullati');",
                     cancellationToken);
 
                 await transaction.CommitAsync(cancellationToken);

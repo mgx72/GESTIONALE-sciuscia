@@ -810,8 +810,44 @@ button.pericoloso:hover {
     text-align: left;
   }
 
+  /* Copia cliente e copia interna sullo stesso foglio quando ci stanno: ogni copia resta intera
+     (se non entra nella pagina passa a quella dopo) e una linea tratteggiata indica dove tagliare. */
+  .pagina-stampa {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
   .pagina-stampa-successiva {
-    page-break-before: always;
+    border-top: 1px dashed #777;
+    margin-top: 28px;
+    padding-top: 18px;
+  }
+
+  .avviso-ricevuta {
+    font-size: 10px;
+  }
+
+  /* Etichette affiancate sullo stesso foglio, tre per riga, con il bordo tratteggiato da ritagliare. */
+  .foglio-etichette {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .etichetta-ritaglio {
+    border: 1px dashed #777;
+    padding: 10px;
+    font-size: 12px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .etichetta-ritaglio p,
+  .etichetta-singola p {
+    margin: 0 0 4px;
+  }
+
+  .etichetta-codice {
+    font-size: 20px;
   }
 }
 
@@ -1087,6 +1123,15 @@ button.pericoloso:hover {
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.riquadro-home-altri:hover {
+  color: var(--primary);
 }
 
 .riquadro-home-vuoto {
@@ -1276,4 +1321,76 @@ button.pericoloso:hover {
 .pa-articolo-data {
   color: var(--text-muted);
   font-size: 13px;
+}
+
+/* --- Revisione generale: ricerca, copie di sicurezza, suggerimento del carico, foto mancanti --- */
+
+.stato-backup-barra {
+  margin-top: auto;
+  padding: 12px 20px 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--sidebar-text);
+  opacity: 0.8;
+}
+
+.stato-backup-barra.errore {
+  color: #ffb4ab;
+  font-weight: 700;
+  opacity: 1;
+}
+
+.ricerca-filtri {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.ricerca-filtri .field {
+  flex: 1 1 160px;
+  margin-bottom: 0;
+}
+
+.ricerca-filtri .ricerca-campo-largo {
+  flex: 1 1 420px;
+}
+
+.carico-suggerimento {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.foto-mancante {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 80px;
+  padding: 6px;
+  border: 1px dashed var(--danger);
+  border-radius: 4px;
+  color: var(--danger);
+  font-size: 11px;
+  text-align: center;
+}
+
+#view-ricerca .panel,
+#tab-impostazioni-backup .panel {
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+
+#view-ricerca #ricerca-pannello-risultati {
+  padding: 0;
 }

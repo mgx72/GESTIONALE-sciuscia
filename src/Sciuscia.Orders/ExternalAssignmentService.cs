@@ -172,6 +172,36 @@ public sealed class ExternalAssignmentService(AppPaths paths, SemaphoreSlim main
             reader.IsDBNull(6) ? null : reader.GetString(6), reader.GetInt32(7));
     }
 
+    /// <summary>
+    /// L'affidamento ancora attivo (non rientrato, non annullato) di un articolo, se esiste: serve
+    /// per aggiungere una seconda lavorazione esterna allo stesso affidamento invece di tentare di
+    /// crearne un altro (un articolo può essere fuori presso un solo artigiano alla volta).
+    /// </summary>
+    public async Task<ExternalAssignmentDetail?> FindActiveByItemAsync(string itemId, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await DatabaseInitializer.OpenReadyConnectionAsync(paths.DatabasePath, cancellationToken: cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT ea.external_assignment_id, ea.item_id, ea.artisan_id, a.display_name,
+                   ea.entrusted_at, ea.expected_return_date, ea.returned_at, ea.row_version
+            FROM external_assignments ea
+            JOIN artisans a ON a.artisan_id = ea.artisan_id
+            WHERE ea.item_id = $itemId AND ea.returned_at IS NULL AND ea.canceled_at IS NULL;
+            """;
+        command.Parameters.AddWithValue("$itemId", itemId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new ExternalAssignmentDetail(
+            reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+            reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5),
+            reader.IsDBNull(6) ? null : reader.GetString(6), reader.GetInt32(7));
+    }
+
     public async Task<IReadOnlyList<ActiveExternalAssignment>> ListActiveByArtisanAsync(string artisanId, CancellationToken cancellationToken = default)
     {
         await using var connection = await DatabaseInitializer.OpenReadyConnectionAsync(paths.DatabasePath, cancellationToken: cancellationToken);

@@ -101,6 +101,13 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                 "operazioni.inviaMessaggio" => await InviaMessaggioAsync(request.Payload),
                 "operazioni.registraStampa" => await RegistraStampaAsync(request.Payload),
                 "sistema.apriLink" => ApriLink(request.Payload),
+                "articoli.annulla" => await AnnullaArticoloAsync(request.Payload),
+                "ricerca.commesse" => await runtime.Orders.Search.SearchOrdersAsync(OptionalString(request.Payload, "testo") ?? string.Empty),
+                "ricerca.articoli" => await RicercaArticoliAsync(request.Payload),
+                "sistema.avvio" => await AvvioAsync(),
+                "sistema.statoBackup" => StatoBackup(),
+                "sistema.eseguiBackup" => await EseguiBackupAsync(),
+                "sistema.apriCartellaBackup" => ApriCartellaBackup(),
                 _ => throw new InvalidOperationException($"Comando non riconosciuto: {request.Command}"),
             };
 
@@ -230,7 +237,7 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         {
             var lavorazioni = await runtime.Orders.ItemWorks.ListByItemAsync(riga.Item.ItemId);
             var lavorazioniInterne = lavorazioni
-                .Where(w => w.CanceledAt is null && w.ExecutionType == "INTERNA")
+                .Where(w => w.CanceledAt is null && w.ExecutionType == "INTERNA" && w.ApprovalStatus != "RIFIUTATA")
                 .Select(w => new AgendaWorkDto(
                     w.AppliedLabelText,
                     w.SourceWorkTypeId is not null && ordineLavorazione.TryGetValue(w.SourceWorkTypeId, out var posizione)
@@ -482,8 +489,24 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
                 throw new ArgumentException("Selezionare l'artigiano per una lavorazione esterna.");
             }
 
-            var assignment = await runtime.Orders.ExternalAssignments.AssignAsync(itemId, artigianoId);
-            assignmentId = assignment.ExternalAssignmentId;
+            // Un articolo può essere fuori presso un solo artigiano alla volta: una seconda
+            // lavorazione esterna per lo stesso artigiano si aggiunge all'affidamento già attivo.
+            var affidamentoAttivo = await runtime.Orders.ExternalAssignments.FindActiveByItemAsync(itemId);
+            if (affidamentoAttivo is not null)
+            {
+                if (affidamentoAttivo.ArtisanId != artigianoId)
+                {
+                    throw new InvalidOperationException(
+                        $"Questo articolo è già affidato a {affidamentoAttivo.ArtisanName}. Segna prima il rientro (Presso artigiani), poi affidalo a un altro artigiano.");
+                }
+
+                assignmentId = affidamentoAttivo.ExternalAssignmentId;
+            }
+            else
+            {
+                var assignment = await runtime.Orders.ExternalAssignments.AssignAsync(itemId, artigianoId);
+                assignmentId = assignment.ExternalAssignmentId;
+            }
         }
 
         // Una lavorazione senza prezzo resta in attesa di risposta del cliente al preventivo
@@ -491,8 +514,197 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         // il rifiuto con RifiutaLavorazioneAsync. Una lavorazione già prezzata nasce invece approvata, come prima.
         var approvazioneIniziale = prezzoCents.HasValue ? "APPROVATA" : "PENDENTE";
 
-        return await runtime.Orders.ItemWorks.AddAsync(
+        var lavorazione = await runtime.Orders.ItemWorks.AddAsync(
             itemId, workTypeId, nome, testoEtichetta, fascia, prezzoCents, costoCents, esecuzione, assignmentId, approvazioneIniziale);
+
+        // Con una lavorazione esterna l'articolo è (o sta per andare) dall'artigiano: passa a
+        // "Presso l'artigiano", così non resta tra i lavori interni dell'Agenda mentre è fuori.
+        if (esecuzione == "ESTERNA")
+        {
+            var articolo = await runtime.Orders.Items.FindAsync(itemId);
+            if (articolo is not null && articolo.WorkflowStatus == "DA_LAVORARE")
+            {
+                await runtime.Orders.Items.SetWorkflowStatusAsync(articolo.ItemId, "PRESSO_ARTIGIANO", articolo.RowVersion);
+            }
+        }
+
+        return lavorazione;
+    }
+
+    /// <summary>Annulla un articolo (es. il cliente lo riprende senza farlo lavorare): resta nello storico con il motivo.</summary>
+    private async Task<ItemRecord> AnnullaArticoloAsync(JsonElement payload)
+    {
+        var itemId = RequireString(payload, "articoloId");
+        var motivo = RequireString(payload, "motivo");
+        var rowVersion = RequireInt(payload, "rowVersion");
+        await runtime.Orders.Items.CancelAsync(itemId, motivo, rowVersion);
+        return await runtime.Orders.Items.FindAsync(itemId)
+            ?? throw new InvalidOperationException("Articolo non trovato dopo l'aggiornamento.");
+    }
+
+    /// <summary>Ricerca articoli per categoria, marca, testo e periodo (tutti facoltativi), anche nelle commesse chiuse.</summary>
+    private async Task<IReadOnlyList<SearchItemRow>> RicercaArticoliAsync(JsonElement payload)
+    {
+        var categoriaId = OptionalString(payload, "categoriaId");
+        var marcaId = OptionalString(payload, "marcaId");
+        var testo = OptionalString(payload, "testo");
+        var daData = OptionalDate(payload, "daData");
+        var aData = OptionalDate(payload, "aData");
+        var cultura = System.Globalization.CultureInfo.InvariantCulture;
+        return await runtime.Orders.Search.SearchItemsAsync(
+            categoriaId, marcaId, testo, daData?.ToString("yyyy-MM-dd", cultura), aData?.ToString("yyyy-MM-dd", cultura));
+    }
+
+    /// <summary>
+    /// Chiude da sola una commessa quando non c'è più niente da fare: tutti gli articoli (non
+    /// annullati) sono stati consegnati e non resta nulla da incassare. Una commessa chiusa esce
+    /// dall'elenco delle commesse aperte e resta consultabile dalla Ricerca. Restituisce true se
+    /// la commessa è stata chiusa.
+    /// </summary>
+    private async Task<bool> ChiudiCommessaSeCompletataAsync(string orderId)
+    {
+        try
+        {
+            var commessa = await runtime.Orders.Orders.FindAsync(orderId);
+            if (commessa is null || commessa.Status != "APERTA")
+            {
+                return false;
+            }
+
+            var articoli = await runtime.Orders.Items.ListByOrderAsync(orderId);
+            var attivi = articoli.Where(a => a.WorkflowStatus != "ANNULLATO").ToList();
+            if (attivi.Count == 0 || attivi.Any(a => a.WorkflowStatus != "CONSEGNATO"))
+            {
+                return false;
+            }
+
+            var totali = await runtime.Orders.Orders.GetFinancialsAsync(orderId);
+            if (totali.BalanceCents > 0)
+            {
+                return false;
+            }
+
+            await runtime.Orders.Orders.CloseAsync(orderId, commessa.RowVersion);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            // La chiusura automatica è solo una comodità: se non riesce, la commessa resta aperta
+            // e l'operazione appena registrata (ritiro o pagamento) non va comunque persa.
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Eseguito una volta all'apertura del programma: chiude le commesse già completate (tutto
+    /// consegnato e pagato) rimaste aperte, e riferisce quando è stato fatto l'ultimo backup.
+    /// </summary>
+    private async Task<object> AvvioAsync()
+    {
+        var chiuse = 0;
+        var aperte = await runtime.Orders.Orders.ListOpenAsync();
+        foreach (var commessa in aperte)
+        {
+            if (commessa.ItemCount > 0 && commessa.BalanceCents <= 0 && await ChiudiCommessaSeCompletataAsync(commessa.OrderId))
+            {
+                chiuse++;
+            }
+        }
+
+        return new { commesseChiuse = chiuse, backup = StatoBackup() };
+    }
+
+    /// <summary>Data e ora dell'ultimo backup completo presente nella cartella dei backup (dal nome della cartella "Backup_AAAAMMGG_HHMMSS").</summary>
+    private DateTime? UltimoBackup()
+    {
+        var radice = runtime.Paths.BackupRoot;
+        if (!Directory.Exists(radice))
+        {
+            return null;
+        }
+
+        DateTime? ultimo = null;
+        foreach (var cartella in Directory.EnumerateDirectories(radice, "Backup_*"))
+        {
+            var nome = Path.GetFileName(cartella);
+            if (nome is null || nome.Length < 22 || !File.Exists(Path.Combine(cartella, "manifest.json")))
+            {
+                continue;
+            }
+
+            if (DateTime.TryParseExact(
+                    nome.Substring(7, 15),
+                    "yyyyMMdd_HHmmss",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out var data)
+                && (ultimo is null || data > ultimo.Value))
+            {
+                ultimo = data;
+            }
+        }
+
+        return ultimo;
+    }
+
+    private object StatoBackup()
+    {
+        var ultimo = UltimoBackup();
+        int? oreDallUltimo = ultimo.HasValue ? (int)(DateTime.Now - ultimo.Value).TotalHours : null;
+        return new
+        {
+            cartella = runtime.Paths.BackupRoot,
+            ultimoBackup = ultimo?.ToString("yyyy-MM-ddTHH:mm:ss"),
+            oreDallUltimo,
+        };
+    }
+
+    /// <summary>
+    /// Copia di sicurezza completa (database e fotografie) in una nuova cartella dentro la cartella
+    /// dei backup. Si conservano le ultime 5 copie: le più vecchie vengono eliminate per non
+    /// riempire il disco (ogni copia contiene anche tutte le fotografie).
+    /// </summary>
+    private async Task<object> EseguiBackupAsync()
+    {
+        var risultato = await Task.Run(() => runtime.Backups.CreateAsync());
+        EliminaBackupVecchi(5);
+        return new
+        {
+            ok = true,
+            cartella = risultato.DirectoryPath,
+            backup = StatoBackup(),
+        };
+    }
+
+    private void EliminaBackupVecchi(int daConservare)
+    {
+        try
+        {
+            var daEliminare = Directory.EnumerateDirectories(runtime.Paths.BackupRoot, "Backup_*")
+                .Where(cartella => File.Exists(Path.Combine(cartella, "manifest.json")))
+                .OrderByDescending(cartella => Path.GetFileName(cartella), StringComparer.Ordinal)
+                .Skip(daConservare)
+                .ToList();
+            foreach (var cartella in daEliminare)
+            {
+                Directory.Delete(cartella, recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+            // Una vecchia copia non eliminabile (file in uso) non è un problema: si riprova al prossimo backup.
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private object ApriCartellaBackup()
+    {
+        var radice = runtime.Paths.BackupRoot;
+        Directory.CreateDirectory(radice);
+        Process.Start(new ProcessStartInfo(radice) { UseShellExecute = true });
+        return new { ok = true };
     }
 
     /// <summary>Decide (o corregge) il prezzo di una lavorazione già applicata, es. dopo che il cliente accetta un preventivo.</summary>
@@ -705,7 +917,9 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         var orderId = RequireString(payload, "commessaId");
         var importoCents = RequireInt(payload, "importoCents");
         var tipo = RequireString(payload, "tipo");
-        return await runtime.Operations.Payments.AddAsync(orderId, importoCents, tipo);
+        var pagamento = await runtime.Operations.Payments.AddAsync(orderId, importoCents, tipo);
+        await ChiudiCommessaSeCompletataAsync(orderId);
+        return pagamento;
     }
 
     /// <summary>
@@ -718,7 +932,9 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         var correggePagamentoId = RequireString(payload, "correggePagamentoId");
         var importoCents = RequireInt(payload, "importoCents");
         var motivo = RequireString(payload, "motivo");
-        return await runtime.Operations.Payments.AddCorrectionAsync(orderId, correggePagamentoId, importoCents, motivo);
+        var correzione = await runtime.Operations.Payments.AddCorrectionAsync(orderId, correggePagamentoId, importoCents, motivo);
+        await ChiudiCommessaSeCompletataAsync(orderId);
+        return correzione;
     }
 
     /// <summary>Registra il ritiro di uno o più articoli: il database li porta automaticamente allo stato "Consegnato".</summary>
@@ -727,7 +943,9 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         var orderId = RequireString(payload, "commessaId");
         var articoli = RequireStringArray(payload, "articoliId");
         var note = OptionalString(payload, "note");
-        return await runtime.Operations.Pickups.CreateAsync(orderId, articoli, notes: note);
+        var ritiro = await runtime.Operations.Pickups.CreateAsync(orderId, articoli, notes: note);
+        await ChiudiCommessaSeCompletataAsync(orderId);
+        return ritiro;
     }
 
     /// <summary>
@@ -742,10 +960,35 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         var affidamentoId = RequireString(payload, "affidamentoId");
         var rowVersion = RequireInt(payload, "rowVersion");
         var dataRientro = OptionalDate(payload, "dataRientro");
-        DateTimeOffset? rientro = dataRientro.HasValue
-            ? new DateTimeOffset(dataRientro.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
-            : null;
+        var oggi = DateOnly.FromDateTime(DateTime.Now);
+
+        // Rientro di oggi (il caso normale): si registra l'ora attuale. Rientro di un giorno
+        // passato: si registra la fine di quel giorno (ora italiana del PC), così anche un rientro
+        // avvenuto lo stesso giorno dell'affidamento resta successivo all'affidamento.
+        DateTimeOffset? rientro = null;
+        if (dataRientro.HasValue && dataRientro.Value != oggi)
+        {
+            if (dataRientro.Value > oggi)
+            {
+                throw new ArgumentException("La data di rientro non può essere nel futuro.");
+            }
+
+            var fineGiorno = dataRientro.Value.ToDateTime(new TimeOnly(23, 59, 59));
+            rientro = new DateTimeOffset(fineGiorno, TimeZoneInfo.Local.GetUtcOffset(fineGiorno));
+        }
+
+        var affidamento = await runtime.Orders.ExternalAssignments.FindAsync(affidamentoId)
+            ?? throw new InvalidOperationException("Affidamento non trovato.");
         await runtime.Orders.ExternalAssignments.MarkReturnedAsync(affidamentoId, rientro, rowVersion);
+
+        // L'articolo è di nuovo in laboratorio: se era "Presso l'artigiano" torna "Da lavorare"
+        // (ricompare in Agenda per le lavorazioni interne o per il controllo prima di segnarlo pronto).
+        var articolo = await runtime.Orders.Items.FindAsync(affidamento.ItemId);
+        if (articolo is not null && articolo.WorkflowStatus == "PRESSO_ARTIGIANO")
+        {
+            await runtime.Orders.Items.SetWorkflowStatusAsync(articolo.ItemId, "DA_LAVORARE", articolo.RowVersion);
+        }
+
         return new { ok = true };
     }
 
@@ -758,7 +1001,34 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
         var testo = RequireString(payload, "testo");
         var destinatario = OptionalString(payload, "destinatario");
         var articoli = OptionalStringArray(payload, "articoliId");
-        return await runtime.Operations.Messages.SendAsync(orderId, tipo, scopo, testo, articoli, destinatario);
+        var messaggio = await runtime.Operations.Messages.SendAsync(orderId, tipo, scopo, testo, articoli, destinatario);
+
+        // Un avviso "pronto" registrato porta gli articoli da "Pronto, da avvisare" ad "Avvisato"
+        // (quelli selezionati; se non ne è stato selezionato nessuno, tutti quelli pronti della
+        // commessa): così escono da soli dall'elenco di chi è ancora da avvisare.
+        if (scopo == "AVVISO_PRONTO")
+        {
+            var articoliCommessa = await runtime.Orders.Items.ListByOrderAsync(orderId);
+            foreach (var articolo in articoliCommessa)
+            {
+                if (articolo.WorkflowStatus != "PRONTO_DA_AVVISARE" || (articoli is not null && !articoli.Contains(articolo.ItemId)))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    await runtime.Orders.Items.SetWorkflowStatusAsync(articolo.ItemId, "AVVISATO", articolo.RowVersion);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Il messaggio è già registrato: un articolo che non si riesce ad aggiornare
+                    // resta "da avvisare" e si può correggere a mano dalla commessa.
+                }
+            }
+        }
+
+        return messaggio;
     }
 
     /// <summary>
@@ -814,14 +1084,29 @@ internal sealed class Bridge(FoundationRuntime runtime, InstallationState instal
     private async Task<PhotoDto> ToPhotoDtoAsync(PhotoRecord photo)
     {
         var absolutePath = Path.Combine(runtime.Paths.PhotosRoot, photo.RelativePath);
-        var bytes = await File.ReadAllBytesAsync(absolutePath);
         var mime = photo.Extension switch
         {
             ".png" => "image/png",
             ".webp" => "image/webp",
             _ => "image/jpeg",
         };
-        var dataUrl = $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
+
+        // Se il file della fotografia non si trova più sul disco (spostato o cancellato a mano),
+        // la commessa deve aprirsi lo stesso: la pagina mostra un segnaposto al posto dell'immagine.
+        string dataUrl;
+        try
+        {
+            var bytes = await File.ReadAllBytesAsync(absolutePath);
+            dataUrl = $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
+        }
+        catch (IOException)
+        {
+            dataUrl = string.Empty;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            dataUrl = string.Empty;
+        }
         return new PhotoDto(photo.PhotoId, photo.ItemId, dataUrl, photo.OriginalFilename, photo.AcquiredAt, photo.Source, photo.SortOrder, photo.RowVersion);
     }
 

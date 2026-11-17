@@ -53,7 +53,7 @@ public sealed class ArtisanWorkService(AppPaths paths)
             JOIN artisans a ON a.artisan_id = ea.artisan_id
             JOIN categories cat ON cat.category_id = i.category_id
             LEFT JOIN item_works iw ON iw.external_assignment_id = ea.external_assignment_id AND iw.canceled_at IS NULL
-            WHERE o.status = 'APERTA'
+            WHERE o.status = 'APERTA' AND i.workflow_status <> 'ANNULLATO'
             ORDER BY ea.entrusted_at, iw.sort_order;
             """;
 

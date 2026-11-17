@@ -19,6 +19,7 @@ public sealed class OrdersRuntime
         Home = new HomeService(paths);
         ReadyPickups = new ReadyPickupService(paths);
         ArtisanWork = new ArtisanWorkService(paths);
+        Search = new SearchService(paths);
     }
 
     public OrderService Orders { get; }
@@ -30,4 +31,5 @@ public sealed class OrdersRuntime
     public HomeService Home { get; }
     public ReadyPickupService ReadyPickups { get; }
     public ArtisanWorkService ArtisanWork { get; }
+    public SearchService Search { get; }
 }

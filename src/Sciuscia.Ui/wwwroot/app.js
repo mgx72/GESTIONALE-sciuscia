@@ -64,6 +64,41 @@
   };
   const ETICHETTE_ESITO_STAMPA = { RIUSCITA: "Riuscita", ERRORE: "Errore", ANNULLATA: "Annullata" };
 
+  const ETICHETTE_PRIVACY = {
+    NON_REGISTRATA: "Da chiedere", ACCONSENTE: "Acconsente", NON_ACCONSENTE: "Non acconsente",
+  };
+  const ETICHETTE_STATO_COMMESSA = { APERTA: "Aperta", CHIUSA: "Chiusa", ANNULLATA: "Annullata" };
+
+  // Testo del messaggio WhatsApp con cui si informa il cliente sul trattamento dei dati e gli si
+  // chiede il consenso (facoltativo) alle comunicazioni promozionali. Riprende i dati
+  // dell'informativa cartacea di Sciuscià; va fatto controllare da chi ha preparato l'informativa.
+  const TESTO_INFORMATIVA_PRIVACY =
+    "Gentile cliente, Sciuscià (via Porciglia 8, Padova) conserva i suoi dati (nome, telefono, email) " +
+    "solo per gestire le sue riparazioni e per gli obblighi di legge, come indicato nell'informativa " +
+    "sul trattamento dei dati personali (art. 13 del Regolamento UE 2016/679), disponibile in negozio " +
+    "e su richiesta. Può chiedere in ogni momento di vedere, correggere o cancellare i suoi dati " +
+    "scrivendo a assistenza@sciusciapadova.it.\n\n" +
+    "Le chiediamo solo una cosa: desidera ricevere anche le nostre comunicazioni promozionali? " +
+    "Risponda ACCONSENTO oppure NON ACCONSENTO. Grazie!";
+
+  /// Numero pronto per un collegamento WhatsApp (solo cifre, con prefisso internazionale): un
+  /// cellulare italiano scritto senza prefisso (10 cifre che iniziano per 3) riceve il 39 davanti,
+  /// altrimenti WhatsApp non riconosce il numero.
+  function numeroPerWhatsApp(testo) {
+    let numero = (testo || "").replace(/[^0-9+]/g, "");
+    if (numero.startsWith("+")) {
+      return numero.slice(1).replace(/\+/g, "");
+    }
+    numero = numero.replace(/\+/g, "");
+    if (numero.startsWith("00")) {
+      return numero.slice(2);
+    }
+    if (numero.length === 10 && numero.startsWith("3")) {
+      return "39" + numero;
+    }
+    return numero;
+  }
+
   const ETICHETTE_STATO = {
     DA_LAVORARE: "Da lavorare",
     PRESSO_ARTIGIANO: "Presso l'artigiano",
@@ -78,6 +113,7 @@
   const vistaAgenda = document.getElementById("view-agenda");
   const vistaPdr = document.getElementById("view-pdr");
   const vistaPa = document.getElementById("view-pa");
+  const vistaRicerca = document.getElementById("view-ricerca");
   let ricercaClientiAnagraficaInCorso = null;
   let articoloDaEvidenziareId = null;
   let agendaCache = [];
@@ -253,9 +289,12 @@
   async function selezionaClienteEApriCommessa(clienteId) {
     nascondiErrore();
     try {
-      await window.sciuscia.call("commesse.crea", { clienteId });
+      const commessa = await window.sciuscia.call("commesse.crea", { clienteId });
       chiudiModale();
-      await caricaCommesse();
+      // Si entra subito nella commessa appena creata e si propone il primo articolo, senza
+      // doverla cercare nell'elenco: è quasi sempre il passo successivo.
+      await apriDettaglioCommessa(commessa.orderId);
+      apriModaleArticolo();
     } catch (errore) {
       mostraErrore("Creazione commessa non riuscita: " + errore.message);
     }
@@ -329,8 +368,13 @@
   function renderDettaglioCommessa(dettaglio) {
     dettaglioCorrente = dettaglio;
     const ordine = dettaglio.order;
-    document.getElementById("dettaglio-titolo").textContent = "Commessa " + ordine.visibleCode;
-    document.getElementById("dettaglio-cliente").textContent = dettaglio.customerName;
+    const statoCommessa = ordine.status === "CHIUSA" ? " — chiusa" : ordine.status === "ANNULLATA" ? " — annullata" : "";
+    document.getElementById("dettaglio-titolo").textContent = "Commessa " + ordine.visibleCode + statoCommessa;
+    // A una commessa chiusa o annullata non si aggiungono articoli (non comparirebbero in Agenda):
+    // per un nuovo lavoro dello stesso cliente si apre una nuova commessa.
+    document.getElementById("btn-nuovo-articolo").hidden = ordine.status !== "APERTA";
+    document.getElementById("dettaglio-cliente").textContent =
+      dettaglio.customerName + (dettaglio.customerMobile ? " · " + dettaglio.customerMobile : "");
     document.getElementById("dettaglio-data").textContent = formattaData(ordine.receivedAt);
     document.getElementById("dettaglio-totale").textContent = formattaEuro(dettaglio.financials.totalCents);
     document.getElementById("dettaglio-pagato").textContent = formattaEuro(dettaglio.financials.paidCents);
@@ -493,7 +537,7 @@
     }
   }
 
-  function apriModaleRitiro() {
+  function apriModaleRitiro(articoliPreselezionatiId) {
     if (!dettaglioCorrente) {
       return;
     }
@@ -509,6 +553,9 @@
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.value = dettaglioArticolo.item.itemId;
+      if (Array.isArray(articoliPreselezionatiId) && articoliPreselezionatiId.includes(dettaglioArticolo.item.itemId)) {
+        checkbox.checked = true;
+      }
       etichetta.appendChild(checkbox);
       etichetta.appendChild(document.createTextNode(
         " " + dettaglioArticolo.item.visibleCode + " — " + dettaglioArticolo.categoryName + " — " + dettaglioArticolo.item.description
@@ -587,6 +634,11 @@
         if (articoliSelezionati.length === 1) {
           return "Gentile cliente, il suo articolo (" + articoliSelezionati[0].categoryName + ", commessa " + codice +
             ") è pronto per il ritiro. Grazie!";
+        }
+        if (articoliSelezionati.length > 1) {
+          const categorie = Array.from(new Set(articoliSelezionati.map((da) => da.categoryName))).join(", ");
+          return "Gentile cliente, i suoi " + articoliSelezionati.length + " articoli (" + categorie + ", commessa " + codice +
+            ") sono pronti per il ritiro. Grazie!";
         }
         return "Gentile cliente, il suo articolo (commessa " + codice + ") è pronto per il ritiro. Grazie!";
       case "PREVENTIVO": {
@@ -709,7 +761,7 @@
     try {
       let url;
       if (tipo === "WHATSAPP") {
-        const numero = destinatario.replace(/[^0-9+]/g, "").replace(/^\+/, "");
+        const numero = numeroPerWhatsApp(destinatario);
         if (!numero) {
           mostraErrore("Indicare il numero del cliente per aprire WhatsApp.");
           return;
@@ -784,44 +836,87 @@
     }
   }
 
-  function costruisciContenutoRicevuta(dettaglio) {
-    const righe = dettaglio.items.map((d) => {
-      const scadenza = d.item.dueDate ? formattaData(d.item.dueDate) : "—";
-      const urgente = d.item.isUrgent ? "Sì" : "—";
-      const priorita = d.item.isPriority ? "Sì" : "—";
+  const AVVISO_RICEVUTA =
+    "La presente ricevuta deve essere esibita al momento del ritiro. " +
+    "Il bene dovrà essere ritirato dal cliente presso il nostro negozio entro sei mesi " +
+    "dalla comunicazione di avvenuta ultimazione della lavorazione. " +
+    "Decorso tale termine, non potrà essere garantita la conservazione del bene nelle medesime condizioni.";
+
+  /// Le lavorazioni che contano per chi legge un documento stampato: non quelle annullate né
+  /// quelle rifiutate dal cliente dopo un preventivo.
+  function lavorazioniValide(dettaglioArticolo) {
+    return dettaglioArticolo.works.filter((w) => w.work.canceledAt == null && w.work.approvalStatus !== "RIFIUTATA");
+  }
+
+  /// Ricevuta della commessa: per ogni articolo (non annullato) le lavorazioni con il loro prezzo.
+  /// La copia per il cliente riporta in fondo anche l'avvertenza sul ritiro.
+  function costruisciContenutoRicevuta(dettaglio, perCliente) {
+    const righe = dettaglio.items.filter((d) => d.item.workflowStatus !== "ANNULLATO").map((d) => {
+      const scadenza = d.item.dueDate ? formattaDataItaliana(d.item.dueDate) : "—";
+      const segni = (d.item.isUrgent ? " — URGENTE" : "") + (d.item.isPriority ? " — priorità" : "");
+      const lavorazioni = lavorazioniValide(d).map((w) =>
+        escapeHtml(w.work.appliedName) + " — " +
+        (w.work.priceStatus === "DEFINITO" ? formattaEuro(w.work.priceCents) : "da preventivare")
+      ).join("<br>");
       return "<tr>" +
         "<td>" + escapeHtml(d.item.visibleCode) + "</td>" +
-        "<td>" + escapeHtml(d.categoryName) + "</td>" +
-        "<td>" + escapeHtml(d.brandName) + "</td>" +
-        "<td>" + escapeHtml(d.item.description) + "</td>" +
+        "<td>" + escapeHtml(d.categoryName + " / " + d.brandName) + "<br>" + escapeHtml(d.item.description + segni) + "</td>" +
+        "<td>" + (lavorazioni || "—") + "</td>" +
         "<td>" + escapeHtml(scadenza) + "</td>" +
-        "<td>" + escapeHtml(urgente) + "</td>" +
-        "<td>" + escapeHtml(priorita) + "</td>" +
         "</tr>";
     }).join("");
+    const telefono = dettaglio.customerMobile ? " — " + dettaglio.customerMobile : "";
     return `
-      <p>Cliente: ${escapeHtml(dettaglio.customerName)}</p>
+      <p><strong>Sciuscià</strong></p>
+      <p>Cliente: ${escapeHtml(dettaglio.customerName + telefono)}</p>
       <p>Commessa: ${escapeHtml(dettaglio.order.visibleCode)} del ${formattaData(dettaglio.order.receivedAt)}</p>
       <table>
-        <thead><tr><th>Codice</th><th>Categoria</th><th>Marca</th><th>Descrizione</th><th>Consegna prevista</th><th>Urgente</th><th>Priorità</th></tr></thead>
+        <thead><tr><th>Codice</th><th>Articolo</th><th>Lavorazioni</th><th>Consegna prevista</th></tr></thead>
         <tbody>${righe}</tbody>
       </table>
       <p>Totale: ${formattaEuro(dettaglio.financials.totalCents)} — Pagato: ${formattaEuro(dettaglio.financials.paidCents)} — Saldo: ${formattaEuro(dettaglio.financials.balanceCents)}</p>
+      ${perCliente ? `<p class="avviso-ricevuta">${escapeHtml(AVVISO_RICEVUTA)}</p>` : ""}
     `;
   }
 
+  /// Etichetta da attaccare all'articolo: dice subito di chi è, che cos'è, cosa va fatto e per
+  /// quando, così in laboratorio non si confonde con un altro.
   function costruisciContenutoEtichetta(dettaglioArticolo) {
-    // Le lavorazioni annullate non devono comparire nei documenti stampati (etichetta, ricevuta):
-    // una volta annullata, una lavorazione va trattata come se non esistesse per chi legge il documento.
-    const lavorazioni = dettaglioArticolo.works
-      .filter((w) => w.work.canceledAt == null)
+    const articolo = dettaglioArticolo.item;
+    const lavorazioni = lavorazioniValide(dettaglioArticolo)
       .map((w) => escapeHtml(w.work.appliedLabelText))
       .join(", ");
+    const cliente = dettaglioCorrente ? dettaglioCorrente.customerName : "";
+    const consegna = articolo.dueDate ? "Consegna: " + formattaDataItaliana(articolo.dueDate) : "";
     return `
-      <p style="font-size:22px"><strong>${escapeHtml(dettaglioArticolo.item.visibleCode)}</strong></p>
-      <p>${escapeHtml(dettaglioArticolo.item.description)}</p>
+      <p class="etichetta-codice"><strong>${escapeHtml(articolo.visibleCode)}</strong>${articolo.isUrgent ? " — URGENTE" : ""}</p>
+      <p><strong>${escapeHtml(cliente)}</strong></p>
+      <p>${escapeHtml(dettaglioArticolo.categoryName + " / " + dettaglioArticolo.brandName + " — " + articolo.description)}</p>
       <p>${lavorazioni || "—"}</p>
+      ${consegna ? `<p>${escapeHtml(consegna)}</p>` : ""}
     `;
+  }
+
+  /// Tutte le etichette della commessa affiancate sullo stesso foglio, con il tratteggio per
+  /// ritagliarle: per pochi articoli basta un solo A4 invece di un foglio per etichetta.
+  function stampaEtichetteCommessa() {
+    if (!dettaglioCorrente) {
+      return;
+    }
+    const articoli = dettaglioCorrente.items.filter(
+      (d) => d.item.workflowStatus !== "ANNULLATO" && d.item.workflowStatus !== "CONSEGNATO"
+    );
+    if (articoli.length === 0) {
+      mostraErrore("Non ci sono articoli di cui stampare l'etichetta.");
+      return;
+    }
+    stampaDocumenti(
+      articoli.map((d) => ({ tipoDocumento: "ETICHETTA", articoloId: d.item.itemId })),
+      null,
+      '<div class="foglio-etichette">' +
+        articoli.map((d) => '<div class="etichetta-ritaglio">' + costruisciContenutoEtichetta(d) + "</div>").join("") +
+        "</div>"
+    );
   }
 
   /// Prepara il contenuto da stampare nell'area dedicata (invisibile a schermo, visibile solo
@@ -831,7 +926,7 @@
   /// stampa (ad esempio "Stampa entrambe insieme") si producono più pagine da registrare insieme.
   function stampaDocumenti(voci, titolo, contenutoHtml) {
     stampaInCorso = voci;
-    areaStampaContenuto.innerHTML = "<h2>" + escapeHtml(titolo) + "</h2>" + contenutoHtml;
+    areaStampaContenuto.innerHTML = (titolo ? "<h2>" + escapeHtml(titolo) + "</h2>" : "") + contenutoHtml;
     window.print();
   }
 
@@ -912,15 +1007,30 @@
       }
       selectStato.appendChild(opzione);
     }
-    selectStato.addEventListener("change", () => cambiaStatoArticolo(articolo.itemId, articolo.rowVersion, selectStato.value));
+    selectStato.addEventListener("change", () => {
+      const nuovoStato = selectStato.value;
+      if (nuovoStato === "CONSEGNATO") {
+        // La consegna si registra sempre come ritiro (così resta scritto quando è stato
+        // consegnato e la commessa si chiude da sola quando è tutto ritirato e pagato).
+        selectStato.value = articolo.workflowStatus;
+        apriModaleRitiro([articolo.itemId]);
+        return;
+      }
+      if (nuovoStato === "ANNULLATO") {
+        selectStato.value = articolo.workflowStatus;
+        annullaArticolo(articolo);
+        return;
+      }
+      cambiaStatoArticolo(articolo.itemId, articolo.rowVersion, nuovoStato);
+    });
 
     scheda.querySelector(".btn-aggiungi-lavorazione").addEventListener("click", () => apriModaleLavorazione(articolo.itemId, articolo.visibleCode));
     scheda.querySelector(".btn-aggiungi-foto").addEventListener("click", () => apriModaleFoto(articolo.itemId, articolo.visibleCode));
     scheda.querySelector(".btn-aggiungi-etichetta").addEventListener("click", () =>
       stampaDocumenti(
         [{ tipoDocumento: "ETICHETTA", articoloId: articolo.itemId }],
-        "Etichetta " + articolo.visibleCode,
-        costruisciContenutoEtichetta(dettaglioArticolo)
+        null,
+        '<div class="etichetta-singola">' + costruisciContenutoEtichetta(dettaglioArticolo) + "</div>"
       )
     );
 
@@ -953,6 +1063,11 @@
     for (const f of foto) {
       const miniatura = document.createElement("div");
       miniatura.className = "miniatura-foto";
+      if (!f.dataUrl) {
+        miniatura.appendChild(costruisciSegnapostoFotoMancante());
+        galleria.appendChild(miniatura);
+        continue;
+      }
       miniatura.innerHTML = `
         <img src="${f.dataUrl}" alt="Fotografia articolo" />
         <button type="button" class="btn-elimina-foto" title="Elimina fotografia">×</button>
@@ -985,6 +1100,11 @@
     for (const f of foto) {
       const miniatura = document.createElement("div");
       miniatura.className = "miniatura-foto";
+      if (!f.dataUrl) {
+        miniatura.appendChild(costruisciSegnapostoFotoMancante());
+        galleria.appendChild(miniatura);
+        continue;
+      }
       miniatura.innerHTML = `<img src="${f.dataUrl}" alt="Fotografia articolo" />`;
       miniatura.querySelector("img").addEventListener("click", () => mostraFotoGrande(f.dataUrl));
       galleria.appendChild(miniatura);
@@ -992,6 +1112,16 @@
 
     contenitore.appendChild(galleria);
     return contenitore;
+  }
+
+  /// Riquadro mostrato al posto di una fotografia il cui file non si trova più nella cartella
+  /// delle fotografie (spostato o cancellato a mano): la commessa si apre comunque.
+  function costruisciSegnapostoFotoMancante() {
+    const segnaposto = document.createElement("div");
+    segnaposto.className = "foto-mancante";
+    segnaposto.title = "Il file di questa fotografia non si trova più nella cartella delle fotografie.";
+    segnaposto.textContent = "File foto non trovato";
+    return segnaposto;
   }
 
   function mostraFotoGrande(dataUrl) {
@@ -1153,6 +1283,40 @@
     }
   }
 
+  /// Messaggio comprensibile quando il programma rifiuta di segnare pronto un articolo perché
+  /// manca il costo dell'artigiano su una lavorazione esterna.
+  function descriviErroreStato(errore) {
+    if (errore && errore.message && errore.message.indexOf("Costo artigiano mancante") >= 0) {
+      return "prima di segnare l'articolo come pronto va scritto il costo dell'artigiano: apri la commessa, premi \"Modifica\" sulla lavorazione esterna e inserisci il costo.";
+    }
+    return errore.message;
+  }
+
+  /// Annulla un articolo chiedendo il motivo (obbligatorio): resta nello storico della commessa.
+  async function annullaArticolo(articolo) {
+    const motivo = window.prompt(
+      "Annullare l'articolo " + articolo.visibleCode + "?\n\nScrivi il motivo (obbligatorio), per esempio: il cliente lo ha ripreso senza farlo lavorare."
+    );
+    if (motivo === null) {
+      return;
+    }
+    if (!motivo.trim()) {
+      mostraErrore("Per annullare un articolo serve indicare il motivo.");
+      return;
+    }
+    nascondiErrore();
+    try {
+      await window.sciuscia.call("articoli.annulla", {
+        articoloId: articolo.itemId,
+        motivo: motivo.trim(),
+        rowVersion: articolo.rowVersion,
+      });
+      await ricaricaDettaglioCommessa();
+    } catch (errore) {
+      mostraErrore("Annullamento non riuscito: " + errore.message);
+    }
+  }
+
   async function cambiaStatoArticolo(articoloId, rowVersion, nuovoStato) {
     nascondiErrore();
     try {
@@ -1163,7 +1327,7 @@
         apriModaleMessaggioPerArticolo(articoloId);
       }
     } catch (errore) {
-      mostraErrore("Cambio stato non riuscito: " + errore.message);
+      mostraErrore("Cambio stato non riuscito: " + descriviErroreStato(errore));
       await ricaricaDettaglioCommessa();
     }
   }
@@ -1631,8 +1795,8 @@
     }
 
     const lettore = new FileReader();
-    lettore.onload = () => {
-      fotoDaFileDataUrl = lettore.result;
+    lettore.onload = async () => {
+      fotoDaFileDataUrl = await riduciImmagine(lettore.result, 1600);
       fotoDaFileNome = file.name;
       nomeFileFotoScelta.textContent = file.name;
       anteprimaFile.src = fotoDaFileDataUrl;
@@ -1643,6 +1807,30 @@
       mostraErrore("Non è stato possibile leggere il file scelto.");
     };
     lettore.readAsDataURL(file);
+  }
+
+  /// Le foto scelte da file (per esempio quelle del telefono) sono spesso molto pesanti: qui
+  /// vengono ridotte a un massimo di `latoMassimo` pixel sul lato lungo, più che sufficienti per
+  /// riconoscere l'articolo e il suo stato, così il gestionale resta veloce e le copie di
+  /// sicurezza non diventano enormi. Un'immagine già piccola resta com'è.
+  function riduciImmagine(dataUrl, latoMassimo) {
+    return new Promise((resolve) => {
+      const immagine = new Image();
+      immagine.onload = () => {
+        const scala = Math.min(1, latoMassimo / Math.max(immagine.width, immagine.height));
+        if (scala >= 1 && dataUrl.length < 1500000) {
+          resolve(dataUrl);
+          return;
+        }
+        const tela = document.createElement("canvas");
+        tela.width = Math.max(1, Math.round(immagine.width * scala));
+        tela.height = Math.max(1, Math.round(immagine.height * scala));
+        tela.getContext("2d").drawImage(immagine, 0, 0, tela.width, tela.height);
+        resolve(tela.toDataURL("image/jpeg", 0.85));
+      };
+      immagine.onerror = () => resolve(dataUrl);
+      immagine.src = dataUrl;
+    });
   }
 
   function chiudiModaleFoto() {
@@ -1699,7 +1887,7 @@
   document.getElementById("btn-annulla-correzione-pagamento").addEventListener("click", chiudiModaleCorrezionePagamento);
   document.getElementById("btn-salva-correzione-pagamento").addEventListener("click", salvaCorrezionePagamento);
 
-  document.getElementById("btn-nuovo-ritiro").addEventListener("click", apriModaleRitiro);
+  document.getElementById("btn-nuovo-ritiro").addEventListener("click", () => apriModaleRitiro());
   document.getElementById("btn-annulla-ritiro").addEventListener("click", chiudiModaleRitiro);
   document.getElementById("btn-salva-ritiro").addEventListener("click", salvaRitiro);
 
@@ -1724,7 +1912,7 @@
     stampaDocumenti(
       [{ tipoDocumento: "COPIA_CLIENTE", articoloId: null }],
       "Ricevuta — Commessa " + dettaglioCorrente.order.visibleCode,
-      costruisciContenutoRicevuta(dettaglioCorrente)
+      costruisciContenutoRicevuta(dettaglioCorrente, true)
     );
   });
   document.getElementById("btn-stampa-interna").addEventListener("click", () => {
@@ -1734,24 +1922,28 @@
     stampaDocumenti(
       [{ tipoDocumento: "COPIA_INTERNA", articoloId: null }],
       "Copia interna — Commessa " + dettaglioCorrente.order.visibleCode,
-      costruisciContenutoRicevuta(dettaglioCorrente)
+      costruisciContenutoRicevuta(dettaglioCorrente, false)
     );
   });
   document.getElementById("btn-stampa-entrambe").addEventListener("click", () => {
     if (!dettaglioCorrente) {
       return;
     }
-    const contenuto = costruisciContenutoRicevuta(dettaglioCorrente);
+    // Le due copie stanno sullo stesso foglio quando ci stanno (separate da una linea da
+    // tagliare); se la commessa è lunga, la seconda copia passa da sola alla pagina dopo.
     stampaDocumenti(
       [
         { tipoDocumento: "COPIA_CLIENTE", articoloId: null },
         { tipoDocumento: "COPIA_INTERNA", articoloId: null },
       ],
-      "Commessa " + dettaglioCorrente.order.visibleCode,
-      '<div class="pagina-stampa"><h3>Copia per il cliente</h3>' + contenuto + "</div>" +
-        '<div class="pagina-stampa pagina-stampa-successiva"><h3>Copia interna</h3>' + contenuto + "</div>"
+      null,
+      '<div class="pagina-stampa"><h3>Copia per il cliente — Commessa ' + escapeHtml(dettaglioCorrente.order.visibleCode) + "</h3>" +
+        costruisciContenutoRicevuta(dettaglioCorrente, true) + "</div>" +
+        '<div class="pagina-stampa pagina-stampa-successiva"><h3>Copia interna — Commessa ' + escapeHtml(dettaglioCorrente.order.visibleCode) + "</h3>" +
+        costruisciContenutoRicevuta(dettaglioCorrente, false) + "</div>"
     );
   });
+  document.getElementById("btn-stampa-etichette").addEventListener("click", stampaEtichetteCommessa);
 
   document.getElementById("btn-torna-elenco").addEventListener("click", () => {
     mostraVistaElenco();
@@ -1795,6 +1987,7 @@
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-pa").classList.remove("active");
+    document.getElementById("nav-ricerca").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaElenco.hidden = true;
@@ -1802,6 +1995,7 @@
     vistaAgenda.hidden = true;
     vistaPdr.hidden = true;
     vistaPa.hidden = true;
+    vistaRicerca.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     vistaHome.hidden = false;
@@ -1815,12 +2009,14 @@
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-pa").classList.remove("active");
+    document.getElementById("nav-ricerca").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaAgenda.hidden = true;
     vistaPdr.hidden = true;
     vistaPa.hidden = true;
+    vistaRicerca.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     mostraVistaElenco();
@@ -1834,6 +2030,7 @@
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-pa").classList.remove("active");
+    document.getElementById("nav-ricerca").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaElenco.hidden = true;
@@ -1841,6 +2038,7 @@
     vistaAgenda.hidden = true;
     vistaPdr.hidden = true;
     vistaPa.hidden = true;
+    vistaRicerca.hidden = true;
     vistaImpostazioni.hidden = true;
     vistaAnagrafiche.hidden = false;
     nascondiErrore();
@@ -1854,6 +2052,7 @@
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-pa").classList.remove("active");
+    document.getElementById("nav-ricerca").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     vistaHome.hidden = true;
     vistaElenco.hidden = true;
@@ -1861,6 +2060,7 @@
     vistaAgenda.hidden = true;
     vistaPdr.hidden = true;
     vistaPa.hidden = true;
+    vistaRicerca.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = false;
     nascondiErrore();
@@ -1923,6 +2123,7 @@
     document.getElementById("nav-commesse").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-pa").classList.remove("active");
+    document.getElementById("nav-ricerca").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
@@ -1930,6 +2131,7 @@
     vistaDettaglio.hidden = true;
     vistaPdr.hidden = true;
     vistaPa.hidden = true;
+    vistaRicerca.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     vistaAgenda.hidden = false;
@@ -1949,6 +2151,7 @@
     document.getElementById("nav-commesse").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pa").classList.remove("active");
+    document.getElementById("nav-ricerca").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
@@ -1956,6 +2159,7 @@
     vistaDettaglio.hidden = true;
     vistaAgenda.hidden = true;
     vistaPa.hidden = true;
+    vistaRicerca.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     vistaPdr.hidden = false;
@@ -1965,6 +2169,8 @@
 
   function mostraSchermataPa() {
     document.getElementById("nav-pa").classList.add("active");
+    document.getElementById("nav-ricerca").classList.remove("active");
+    vistaRicerca.hidden = true;
     document.getElementById("nav-home").classList.remove("active");
     document.getElementById("nav-commesse").classList.remove("active");
     document.getElementById("nav-agenda").classList.remove("active");
@@ -1981,6 +2187,232 @@
     vistaPa.hidden = false;
     nascondiErrore();
     caricaPa();
+  }
+
+  // --- Ricerca (tutto l'archivio, comprese le commesse chiuse) ---
+
+  let selectRicercaPronte = false;
+
+  async function mostraSchermataRicerca() {
+    document.getElementById("nav-ricerca").classList.add("active");
+    document.getElementById("nav-home").classList.remove("active");
+    document.getElementById("nav-commesse").classList.remove("active");
+    document.getElementById("nav-agenda").classList.remove("active");
+    document.getElementById("nav-pdr").classList.remove("active");
+    document.getElementById("nav-pa").classList.remove("active");
+    document.getElementById("nav-anagrafiche").classList.remove("active");
+    document.getElementById("nav-impostazioni").classList.remove("active");
+    vistaHome.hidden = true;
+    vistaElenco.hidden = true;
+    vistaDettaglio.hidden = true;
+    vistaAgenda.hidden = true;
+    vistaPdr.hidden = true;
+    vistaPa.hidden = true;
+    vistaAnagrafiche.hidden = true;
+    vistaImpostazioni.hidden = true;
+    vistaRicerca.hidden = false;
+    nascondiErrore();
+    document.getElementById("ricerca-testo").focus();
+
+    if (!selectRicercaPronte) {
+      try {
+        const [categorie, marche] = await Promise.all([
+          window.sciuscia.call("anagrafiche.categorie", { includiInattive: true }),
+          window.sciuscia.call("anagrafiche.marche", { includiInattive: true }),
+        ]);
+        popolaSelect(document.getElementById("ricerca-categoria"), [{ categoryId: "", name: "Tutte" }].concat(categorie), (c) => c.categoryId, (c) => c.name);
+        popolaSelect(document.getElementById("ricerca-marca"), [{ brandId: "", canonicalName: "Tutte" }].concat(marche), (m) => m.brandId, (m) => m.canonicalName);
+        selectRicercaPronte = true;
+      } catch (errore) {
+        mostraErrore("Non è stato possibile preparare la ricerca: " + errore.message);
+      }
+    }
+  }
+
+  function mostraRisultatiRicerca(testataHtml, righe, riepilogo) {
+    document.getElementById("ricerca-testata").innerHTML = testataHtml;
+    const corpo = document.getElementById("ricerca-corpo");
+    corpo.innerHTML = "";
+    for (const riga of righe) {
+      corpo.appendChild(riga);
+    }
+    document.getElementById("ricerca-riepilogo").textContent = riepilogo;
+    document.getElementById("ricerca-pannello-risultati").hidden = righe.length === 0;
+    document.getElementById("ricerca-stato-vuoto").hidden = righe.length > 0;
+  }
+
+  async function eseguiRicercaCommesse() {
+    const testo = document.getElementById("ricerca-testo").value.trim();
+    if (testo.length < 2) {
+      mostraErrore("Scrivi almeno due caratteri da cercare.");
+      return;
+    }
+    nascondiErrore();
+    try {
+      const risultati = await window.sciuscia.call("ricerca.commesse", { testo }) || [];
+      const righe = risultati.map((commessa) => {
+        const riga = document.createElement("tr");
+        const saldoClasse = commessa.balanceCents > 0 ? "saldo-positivo" : "saldo-zero";
+        riga.innerHTML = `
+          <td>${formattaData(commessa.receivedAt)}</td>
+          <td>${escapeHtml(commessa.orderVisibleCode)}</td>
+          <td>${escapeHtml(commessa.customerName)}</td>
+          <td>${escapeHtml(commessa.customerMobile || "")}</td>
+          <td>${escapeHtml(commessa.itemsSummary || "—")}</td>
+          <td>${escapeHtml(ETICHETTE_STATO_COMMESSA[commessa.status] || commessa.status)}</td>
+          <td>${formattaEuro(commessa.totalCents)}</td>
+          <td class="${saldoClasse}">${formattaEuro(commessa.balanceCents)}</td>
+          <td><button type="button" class="btn-apri-commessa">Apri</button></td>
+        `;
+        riga.querySelector(".btn-apri-commessa").addEventListener("click", () => apriCommessaDaRicerca(commessa.orderId, null));
+        return riga;
+      });
+      mostraRisultatiRicerca(
+        "<tr><th>Data</th><th>Commessa</th><th>Cliente</th><th>Telefono</th><th>Articoli</th><th>Stato</th><th>Totale</th><th>Saldo</th><th></th></tr>",
+        righe,
+        righe.length === 0 ? "" : righe.length + (righe.length === 1 ? " commessa trovata" : " commesse trovate") + " per \"" + testo + "\", dalla più recente."
+      );
+    } catch (errore) {
+      mostraErrore("Ricerca non riuscita: " + errore.message);
+    }
+  }
+
+  async function eseguiRicercaArticoli() {
+    const categoriaId = document.getElementById("ricerca-categoria").value || null;
+    const marcaId = document.getElementById("ricerca-marca").value || null;
+    const testo = document.getElementById("ricerca-descrizione").value.trim() || null;
+    const daData = document.getElementById("ricerca-da-data").value || null;
+    const aData = document.getElementById("ricerca-a-data").value || null;
+    if (!categoriaId && !marcaId && !testo && !daData && !aData) {
+      mostraErrore("Indica almeno una categoria, una marca, una parola oppure un periodo.");
+      return;
+    }
+    nascondiErrore();
+    try {
+      const risultati = await window.sciuscia.call("ricerca.articoli", { categoriaId, marcaId, testo, daData, aData }) || [];
+      const righe = risultati.map((articolo) => {
+        const riga = document.createElement("tr");
+        riga.innerHTML = `
+          <td>${formattaData(articolo.receivedAt)}</td>
+          <td>${escapeHtml(articolo.customerName)}</td>
+          <td>${escapeHtml(articolo.customerMobile || "")}</td>
+          <td>${escapeHtml(articolo.itemVisibleCode + " — " + articolo.categoryName + " / " + articolo.brandName + " — " + articolo.description)}</td>
+          <td>${escapeHtml(ETICHETTE_STATO[articolo.workflowStatus] || articolo.workflowStatus)}</td>
+          <td>${escapeHtml(ETICHETTE_STATO_COMMESSA[articolo.orderStatus] || articolo.orderStatus)}</td>
+          <td><button type="button" class="btn-apri-commessa">Apri</button></td>
+        `;
+        riga.querySelector(".btn-apri-commessa").addEventListener("click", () => apriCommessaDaRicerca(articolo.orderId, articolo.itemId));
+        return riga;
+      });
+      mostraRisultatiRicerca(
+        "<tr><th>Portato il</th><th>Cliente</th><th>Telefono</th><th>Articolo</th><th>Stato articolo</th><th>Commessa</th><th></th></tr>",
+        righe,
+        righe.length === 0 ? "" : righe.length + (righe.length === 1 ? " articolo trovato" : " articoli trovati") + ", dal più recente."
+      );
+    } catch (errore) {
+      mostraErrore("Ricerca non riuscita: " + errore.message);
+    }
+  }
+
+  async function apriCommessaDaRicerca(orderId, itemId) {
+    articoloDaEvidenziareId = itemId;
+    document.getElementById("nav-commesse").classList.add("active");
+    document.getElementById("nav-ricerca").classList.remove("active");
+    vistaRicerca.hidden = true;
+    await apriDettaglioCommessa(orderId);
+  }
+
+  document.getElementById("nav-ricerca").addEventListener("click", mostraSchermataRicerca);
+  document.getElementById("btn-ricerca-commesse").addEventListener("click", eseguiRicercaCommesse);
+  document.getElementById("ricerca-testo").addEventListener("keydown", (evento) => {
+    if (evento.key === "Enter") {
+      eseguiRicercaCommesse();
+    }
+  });
+  document.getElementById("btn-ricerca-articoli").addEventListener("click", eseguiRicercaArticoli);
+
+  // --- Copie di sicurezza (backup) ---
+
+  function descriviUltimoBackup(stato) {
+    if (!stato || !stato.ultimoBackup) {
+      return "nessuna copia ancora fatta";
+    }
+    const quando = new Date(stato.ultimoBackup);
+    if (Number.isNaN(quando.getTime())) {
+      return stato.ultimoBackup;
+    }
+    return quando.toLocaleDateString("it-IT") + " alle " +
+      quando.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function aggiornaStatoBackup(stato) {
+    const barra = document.getElementById("stato-backup-barra");
+    barra.classList.remove("errore");
+    barra.textContent = "Ultima copia di sicurezza: " + descriviUltimoBackup(stato);
+    document.getElementById("backup-ultimo").textContent = descriviUltimoBackup(stato);
+    document.getElementById("backup-cartella").textContent = stato && stato.cartella ? stato.cartella : "—";
+  }
+
+  /// Fa una copia di sicurezza completa. `automatica` = quella di una volta al giorno all'apertura
+  /// del programma: se non riesce non interrompe il lavoro, ma resta segnalata in rosso nella barra.
+  async function eseguiBackup(automatica) {
+    const barra = document.getElementById("stato-backup-barra");
+    barra.classList.remove("errore");
+    barra.textContent = "Copia di sicurezza in corso…";
+    try {
+      const risultato = await window.sciuscia.call("sistema.eseguiBackup");
+      aggiornaStatoBackup(risultato.backup);
+      return true;
+    } catch (errore) {
+      barra.classList.add("errore");
+      barra.textContent = "Copia di sicurezza NON riuscita";
+      if (!automatica) {
+        mostraErrore("La copia di sicurezza non è riuscita: " + errore.message);
+      }
+      return false;
+    }
+  }
+
+  async function caricaStatoBackup() {
+    try {
+      aggiornaStatoBackup(await window.sciuscia.call("sistema.statoBackup"));
+    } catch (errore) {
+      mostraErrore("Non è stato possibile leggere lo stato delle copie di sicurezza: " + errore.message);
+    }
+  }
+
+  document.getElementById("btn-backup-ora").addEventListener("click", async () => {
+    const bottone = document.getElementById("btn-backup-ora");
+    nascondiErrore();
+    bottone.disabled = true;
+    const riuscito = await eseguiBackup(false);
+    bottone.disabled = false;
+    if (riuscito) {
+      mostraConfermaPulsante(bottone, "Copia fatta ✓");
+    }
+  });
+  document.getElementById("btn-backup-apri-cartella").addEventListener("click", async () => {
+    try {
+      await window.sciuscia.call("sistema.apriCartellaBackup");
+    } catch (errore) {
+      mostraErrore("Non è stato possibile aprire la cartella: " + errore.message);
+    }
+  });
+
+  /// All'apertura del programma: chiude le commesse già completate rimaste aperte e, se l'ultima
+  /// copia di sicurezza ha più di 20 ore (o non esiste), ne fa partire una nuova senza far
+  /// aspettare l'operatore. Qualsiasi problema qui non deve impedire di lavorare.
+  async function avvioProgramma() {
+    try {
+      const avvio = await window.sciuscia.call("sistema.avvio");
+      aggiornaStatoBackup(avvio.backup);
+      if (avvio.backup.oreDallUltimo === null || avvio.backup.oreDallUltimo >= 20) {
+        eseguiBackup(true);
+      }
+    } catch (errore) {
+      document.getElementById("stato-backup-barra").textContent = "";
+    }
+    caricaHome();
   }
 
   /// Riepilogo operativo (specifica, punto 5 della lista priorità): cinque riquadri che segnalano
@@ -2030,7 +2462,7 @@
     }
   }
 
-  function popolaRiquadroHome(prefisso, righe, trasforma) {
+  function popolaRiquadroHome(prefisso, righe, trasforma, mostraTutti) {
     const numero = document.getElementById("home-" + prefisso + "-numero");
     const elenco = document.getElementById("home-" + prefisso + "-elenco");
     const vuoto = document.getElementById("home-" + prefisso + "-vuoto");
@@ -2040,7 +2472,7 @@
     elenco.innerHTML = "";
     vuoto.hidden = righe.length > 0;
 
-    const MASSIMO_VISIBILE = 5;
+    const MASSIMO_VISIBILE = mostraTutti ? righe.length : 5;
     for (const riga of righe.slice(0, MASSIMO_VISIBILE)) {
       const dati = trasforma(riga);
       const bottone = document.createElement("button");
@@ -2054,9 +2486,11 @@
     }
 
     if (righe.length > MASSIMO_VISIBILE) {
-      const altri = document.createElement("div");
+      const altri = document.createElement("button");
+      altri.type = "button";
       altri.className = "riquadro-home-altri";
-      altri.textContent = "+ altri " + (righe.length - MASSIMO_VISIBILE);
+      altri.textContent = "+ altri " + (righe.length - MASSIMO_VISIBILE) + " (mostra tutti)";
+      altri.addEventListener("click", () => popolaRiquadroHome(prefisso, righe, trasforma, true));
       elenco.appendChild(altri);
     }
   }
@@ -2068,12 +2502,14 @@
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-pa").classList.remove("active");
+    document.getElementById("nav-ricerca").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaAgenda.hidden = true;
     vistaPdr.hidden = true;
     vistaPa.hidden = true;
+    vistaRicerca.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     await apriDettaglioCommessa(orderId);
@@ -2135,6 +2571,7 @@
       riquadro.hidden = false;
 
       if (bottone.dataset.tabImpostazioni === "calendario") caricaCalendario();
+      else if (bottone.dataset.tabImpostazioni === "backup") caricaStatoBackup();
     });
   });
 
@@ -2163,6 +2600,7 @@
         <td>${escapeHtml(nomeCompleto)}</td>
         <td>${escapeHtml(cliente.mobileOriginal || "")}</td>
         <td>${escapeHtml(cliente.email || "")}</td>
+        <td>${escapeHtml(ETICHETTE_PRIVACY[cliente.privacyStatus] || "—")}</td>
         <td class="${statoClasse}">${statoTesto}</td>
         <td class="azioni-riga">
           <button type="button" class="btn-modifica">Modifica</button>
@@ -2190,6 +2628,7 @@
     document.getElementById("cliente-anagrafica-nome").value = cliente ? (cliente.firstName || "") : "";
     document.getElementById("cliente-anagrafica-cellulare").value = cliente ? (cliente.mobileOriginal || "") : "";
     document.getElementById("cliente-anagrafica-email").value = cliente ? (cliente.email || "") : "";
+    document.getElementById("cliente-anagrafica-privacy").value = cliente ? cliente.privacyStatus : "NON_REGISTRATA";
     document.getElementById("modal-cliente-anagrafica").hidden = false;
   }
 
@@ -2202,6 +2641,7 @@
     const nome = document.getElementById("cliente-anagrafica-nome").value.trim() || null;
     const cellulare = document.getElementById("cliente-anagrafica-cellulare").value.trim() || null;
     const email = document.getElementById("cliente-anagrafica-email").value.trim() || null;
+    const statoPrivacy = document.getElementById("cliente-anagrafica-privacy").value || "NON_REGISTRATA";
 
     if (!cognome) {
       mostraErrore("Il cognome del cliente è obbligatorio.");
@@ -2214,16 +2654,44 @@
         await window.sciuscia.call("anagrafiche.modificaCliente", {
           clienteId: clienteAnagraficaInModifica.customerId,
           cognome, nome, cellulare, email,
-          statoPrivacy: clienteAnagraficaInModifica.privacyStatus,
+          statoPrivacy,
           rowVersion: clienteAnagraficaInModifica.rowVersion,
         });
       } else {
-        await window.sciuscia.call("anagrafiche.creaCliente", { cognome, nome, cellulare, email });
+        const nuovoCliente = await window.sciuscia.call("anagrafiche.creaCliente", { cognome, nome, cellulare, email });
+        if (statoPrivacy !== "NON_REGISTRATA") {
+          await window.sciuscia.call("anagrafiche.modificaCliente", {
+            clienteId: nuovoCliente.customerId,
+            cognome, nome, cellulare, email,
+            statoPrivacy,
+            rowVersion: nuovoCliente.rowVersion,
+          });
+        }
       }
       chiudiModaleCliente();
       await caricaClientiAnagrafica();
     } catch (errore) {
       mostraErrore("Salvataggio cliente non riuscito: " + errore.message);
+    }
+  }
+
+  /// Apre WhatsApp con il messaggio dell'informativa privacy già scritto, verso il cellulare
+  /// indicato nella scheda del cliente. La risposta del cliente ("ACCONSENTO" / "NON ACCONSENTO")
+  /// va poi segnata a mano nel campo Privacy: il gestionale non riceve le risposte di WhatsApp.
+  async function preparaMessaggioPrivacy() {
+    const cellulare = document.getElementById("cliente-anagrafica-cellulare").value.trim();
+    const numero = numeroPerWhatsApp(cellulare);
+    if (!numero) {
+      mostraErrore("Per inviare l'informativa con WhatsApp serve il cellulare del cliente.");
+      return;
+    }
+    nascondiErrore();
+    try {
+      await window.sciuscia.call("sistema.apriLink", {
+        url: "https://wa.me/" + numero + "?text=" + encodeURIComponent(TESTO_INFORMATIVA_PRIVACY),
+      });
+    } catch (errore) {
+      mostraErrore("Non è stato possibile aprire WhatsApp: " + errore.message);
     }
   }
 
@@ -2787,6 +3255,7 @@
   document.getElementById("btn-nuovo-cliente-anagrafica").addEventListener("click", () => apriModaleCliente(null));
   document.getElementById("btn-annulla-cliente-anagrafica").addEventListener("click", chiudiModaleCliente);
   document.getElementById("btn-salva-cliente-anagrafica").addEventListener("click", salvaClienteAnagrafica);
+  document.getElementById("btn-privacy-whatsapp").addEventListener("click", preparaMessaggioPrivacy);
 
   document.getElementById("btn-nuova-categoria-anagrafica").addEventListener("click", () => apriModaleCategoria(null));
   document.getElementById("btn-annulla-categoria-anagrafica").addEventListener("click", chiudiModaleCategoria);
@@ -3201,12 +3670,14 @@
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-pa").classList.remove("active");
+    document.getElementById("nav-ricerca").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaAgenda.hidden = true;
     vistaPdr.hidden = true;
     vistaPa.hidden = true;
+    vistaRicerca.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     await apriDettaglioCommessa(orderId);
@@ -3219,12 +3690,14 @@
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-pa").classList.remove("active");
+    document.getElementById("nav-ricerca").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaAgenda.hidden = true;
     vistaPdr.hidden = true;
     vistaPa.hidden = true;
+    vistaRicerca.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     await apriDettaglioCommessa(orderId);
@@ -3549,7 +4022,9 @@
       " · affidato il " + formattaDataItaliana(articolo.entrustedAt.substring(0, 10));
     document.getElementById("anteprima-artigiani-lavorazioni").textContent =
       articolo.lavorazioni.length > 0 ? articolo.lavorazioni.join(", ") : "Nessuna lavorazione esterna indicata.";
-    document.getElementById("anteprima-artigiani-data-rientro").value = new Date().toISOString().substring(0, 10);
+    const campoDataRientro = document.getElementById("anteprima-artigiani-data-rientro");
+    campoDataRientro.value = formattaDataPerInput(new Date());
+    campoDataRientro.max = formattaDataPerInput(new Date());
 
     const contenitoreFoto = document.getElementById("anteprima-artigiani-foto");
     contenitoreFoto.innerHTML = "";
@@ -3580,20 +4055,22 @@
     document.getElementById("nav-agenda").classList.remove("active");
     document.getElementById("nav-pdr").classList.remove("active");
     document.getElementById("nav-pa").classList.remove("active");
+    document.getElementById("nav-ricerca").classList.remove("active");
     document.getElementById("nav-anagrafiche").classList.remove("active");
     document.getElementById("nav-impostazioni").classList.remove("active");
     vistaHome.hidden = true;
     vistaAgenda.hidden = true;
     vistaPdr.hidden = true;
     vistaPa.hidden = true;
+    vistaRicerca.hidden = true;
     vistaAnagrafiche.hidden = true;
     vistaImpostazioni.hidden = true;
     await apriDettaglioCommessa(orderId);
   }
 
   // "Segna Rientrato" (specifica, sezione 7): la data propone oggi ma resta modificabile, per
-  // registrare un rientro avvenuto prima. Non cambia da solo lo stato di lavorazione
-  // dell'articolo: resta una scelta dell'operatore dal dettaglio della commessa.
+  // registrare un rientro avvenuto prima. L'articolo, di nuovo in laboratorio, torna da solo
+  // "Da lavorare" (lo fa il programma): ricompare in Agenda fino a quando viene segnato pronto.
   async function segnaRientratoDaArtigiani() {
     if (!anteprimaArtigianiCorrente) {
       return;
@@ -3633,7 +4110,7 @@
         apriModaleMessaggioPerArticolo(articolo.item.itemId);
       }
     } catch (errore) {
-      mostraErrore("Non è stato possibile segnare l'articolo come pronto: " + errore.message);
+      mostraErrore("Non è stato possibile segnare l'articolo come pronto: " + descriviErroreStato(errore));
     }
   }
 
@@ -3747,9 +4224,72 @@
         corpo.appendChild(costruisciRigaCarico(giorno, carichiPerGiorno.get(giorno.date)));
       }
       costruisciGraficoCarico(giorniCalendario || [], carichiPerGiorno, "carico-grafico", capacita.capacitaGiornalieraMinuti, scegliDataCarico);
+      aggiornaSuggerimentoCarico(giorniCalendario || [], carichiPerGiorno, articoli, capacita.capacitaGiornalieraMinuti);
     } catch (errore) {
       mostraErrore("Non è stato possibile consultare il carico: " + errore.message);
     }
+  }
+
+  let giornoSuggeritoCarico = null;
+
+  /// Distribuzione del lavoro: propone il primo giorno lavorativo (da domani in poi, nel periodo
+  /// mostrato) in cui il tempo già impegnato, più quello dell'articolo che si sta collocando, non
+  /// supera le ore di lavoro della giornata. Funziona con i "tempi di realizzo" del Listino: se
+  /// nessuna lavorazione prevista ha un tempo impostato, lo dice invece di proporre una data a caso.
+  function aggiornaSuggerimentoCarico(giorniCalendario, carichiPerGiorno, articoli, capacitaGiornalieraMinuti) {
+    const riquadro = document.getElementById("carico-suggerimento");
+    const testo = document.getElementById("carico-suggerimento-testo");
+    const bottone = document.getElementById("btn-usa-suggerimento-carico");
+    giornoSuggeritoCarico = null;
+    bottone.hidden = true;
+    riquadro.hidden = false;
+
+    let minutiNoti = 0;
+    for (const carico of carichiPerGiorno.values()) {
+      minutiNoti += carico.minuti;
+    }
+    if (!capacitaGiornalieraMinuti || minutiNoti === 0) {
+      testo.textContent = "Per farti proporre il primo giorno libero, imposta il \"Tempo di realizzo\" delle lavorazioni nel Listino (Anagrafiche): per ora il carico si legge solo dal numero di articoli per giorno.";
+      return;
+    }
+
+    // L'articolo che si sta spostando (se esiste già) pesa con i suoi tempi sul giorno scelto, ma
+    // sul giorno in cui è già previsto è già contato.
+    let minutiArticolo = 0;
+    let dataAttuale = null;
+    if (consultaCaricoContesto && consultaCaricoContesto.articoloEsistente) {
+      const voce = articoli.find((a) => a.item.itemId === consultaCaricoContesto.articoloEsistente.itemId);
+      if (voce) {
+        minutiArticolo = minutiLavorazioniInterne(voce);
+        dataAttuale = voce.item.dueDate;
+      }
+    }
+
+    const oggiTesto = formattaDataPerInput(new Date());
+    for (const giorno of giorniCalendario) {
+      if (giorno.date <= oggiTesto || giorno.capacityFactor <= 0) {
+        continue;
+      }
+      const soglia = capacitaGiornalieraMinuti * giorno.capacityFactor;
+      const impegnati = (carichiPerGiorno.get(giorno.date) || { minuti: 0 }).minuti;
+      const aggiunta = giorno.date === dataAttuale ? 0 : minutiArticolo;
+      if (impegnati + aggiunta <= soglia) {
+        giornoSuggeritoCarico = giorno;
+        break;
+      }
+    }
+
+    if (!giornoSuggeritoCarico) {
+      testo.textContent = "Nel periodo mostrato tutti i giorni lavorativi sono già pieni: allarga il periodo (campo \"Al\") per trovare il primo giorno con spazio.";
+      return;
+    }
+
+    const nomeGiorno = NOMI_GIORNI_SETTIMANA[new Date(giornoSuggeritoCarico.date + "T00:00:00").getDay()];
+    const impegnatiGiorno = (carichiPerGiorno.get(giornoSuggeritoCarico.date) || { minuti: 0 }).minuti;
+    testo.textContent = "Primo giorno con spazio: " + nomeGiorno.toLowerCase() + " " + formattaDataItaliana(giornoSuggeritoCarico.date) +
+      " (già impegnate " + formattaOreMinuti(impegnatiGiorno) + " su " +
+      formattaOreMinuti(capacitaGiornalieraMinuti * giornoSuggeritoCarico.capacityFactor) + ").";
+    bottone.hidden = false;
   }
 
   /// Somma i tempi di realizzo (minuti) delle lavorazioni interne ancora da fare di un articolo
@@ -3903,6 +4443,11 @@
   document.getElementById("btn-consulta-carico-nuovo-articolo").addEventListener("click", () => apriConsultaCarico(null));
   document.getElementById("btn-aggiorna-carico").addEventListener("click", caricaConsultaCarico);
   document.getElementById("btn-chiudi-consulta-carico").addEventListener("click", chiudiConsultaCarico);
+  document.getElementById("btn-usa-suggerimento-carico").addEventListener("click", () => {
+    if (giornoSuggeritoCarico) {
+      scegliDataCarico(giornoSuggeritoCarico);
+    }
+  });
 
-  caricaHome();
+  avvioProgramma();
 })();

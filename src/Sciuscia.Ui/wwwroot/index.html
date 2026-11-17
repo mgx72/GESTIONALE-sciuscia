@@ -14,8 +14,10 @@
       <a class="nav-item" data-view="agenda" id="nav-agenda">Agenda lavori</a>
       <a class="nav-item" data-view="pdr" id="nav-pdr">Pronti da ritirare</a>
       <a class="nav-item" data-view="pa" id="nav-pa">Presso artigiani</a>
+      <a class="nav-item" data-view="ricerca" id="nav-ricerca">Ricerca</a>
       <a class="nav-item" data-view="anagrafiche" id="nav-anagrafiche">Anagrafiche</a>
       <a class="nav-item" data-view="impostazioni" id="nav-impostazioni">Impostazioni</a>
+      <div id="stato-backup-barra" class="stato-backup-barra"></div>
     </nav>
 
     <main class="main">
@@ -155,8 +157,9 @@
             <button type="button" id="btn-stampa-ricevuta">Stampa ricevuta per il cliente</button>
             <button type="button" id="btn-stampa-interna">Stampa copia interna</button>
             <button type="button" id="btn-stampa-entrambe" class="primary">Stampa entrambe insieme</button>
+            <button type="button" id="btn-stampa-etichette">Stampa tutte le etichette su un foglio</button>
           </div>
-          <p class="hint">Dopo aver stampato (o annullato la stampa), il risultato viene registrato qui sotto.</p>
+          <p class="hint">"Stampa entrambe insieme" mette le due copie sullo stesso foglio quando ci stanno, separate da una linea da tagliare. Le etichette escono affiancate sullo stesso foglio, con il tratteggio per ritagliarle. Dopo aver stampato (o annullato la stampa), il risultato viene registrato qui sotto.</p>
           <table>
             <thead><tr><th>Data</th><th>Documento</th><th>Articolo</th><th>Esito</th></tr></thead>
             <tbody id="corpo-tabella-stampe"></tbody>
@@ -185,7 +188,7 @@
           </div>
           <div class="panel">
             <table>
-              <thead><tr><th>Cognome e nome</th><th>Cellulare</th><th>Email</th><th>Stato</th><th></th></tr></thead>
+              <thead><tr><th>Cognome e nome</th><th>Cellulare</th><th>Email</th><th>Privacy</th><th>Stato</th><th></th></tr></thead>
               <tbody id="corpo-tabella-clienti-anagrafica"></tbody>
             </table>
           </div>
@@ -301,6 +304,62 @@
         <div id="pa-stato-vuoto" class="empty-state" hidden>Nessun articolo attualmente presso un artigiano.</div>
       </div>
 
+      <div id="view-ricerca" hidden>
+        <div class="main-header">
+          <h2>Ricerca</h2>
+        </div>
+        <p class="subtitle-inline">
+          Cerca in tutto l'archivio, comprese le commesse già chiuse (consegnate e pagate), che non compaiono più tra le commesse aperte. Aprendo una commessa ritrovi articoli, lavorazioni e fotografie.
+        </p>
+
+        <div class="panel">
+          <h3>Cerca un cliente o una commessa</h3>
+          <div class="ricerca-filtri">
+            <div class="field ricerca-campo-largo">
+              <label for="ricerca-testo">Cognome, nome, numero di telefono oppure codice della commessa o dell'articolo</label>
+              <input type="text" id="ricerca-testo" placeholder="Es. Rossi — 333 1234567 — LAB-126" autocomplete="off" />
+            </div>
+            <button type="button" id="btn-ricerca-commesse" class="primary">Cerca</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Cerca chi ha portato un certo articolo</h3>
+          <div class="ricerca-filtri">
+            <div class="field">
+              <label for="ricerca-categoria">Categoria</label>
+              <select id="ricerca-categoria"></select>
+            </div>
+            <div class="field">
+              <label for="ricerca-marca">Marca</label>
+              <select id="ricerca-marca"></select>
+            </div>
+            <div class="field">
+              <label for="ricerca-descrizione">Parola nella descrizione o lavorazione</label>
+              <input type="text" id="ricerca-descrizione" placeholder="Es. stivale, tintura..." autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="ricerca-da-data">Portato dal</label>
+              <input type="date" id="ricerca-da-data" />
+            </div>
+            <div class="field">
+              <label for="ricerca-a-data">al</label>
+              <input type="date" id="ricerca-a-data" />
+            </div>
+            <button type="button" id="btn-ricerca-articoli" class="primary">Cerca articoli</button>
+          </div>
+        </div>
+
+        <p id="ricerca-riepilogo" class="subtitle-inline"></p>
+        <div class="panel" id="ricerca-pannello-risultati" hidden>
+          <table>
+            <thead id="ricerca-testata"></thead>
+            <tbody id="ricerca-corpo"></tbody>
+          </table>
+        </div>
+        <div id="ricerca-stato-vuoto" class="empty-state" hidden>Nessun risultato trovato.</div>
+      </div>
+
       <div id="view-impostazioni" hidden>
         <div class="main-header">
           <h2>Impostazioni</h2>
@@ -308,6 +367,22 @@
 
         <div class="tabs-anagrafiche">
           <button type="button" class="tab-btn active" data-tab-impostazioni="calendario">Calendario aperture</button>
+          <button type="button" class="tab-btn" data-tab-impostazioni="backup">Copie di sicurezza</button>
+        </div>
+
+        <div class="tab-pane" id="tab-impostazioni-backup" hidden>
+          <p class="subtitle-inline">
+            La copia di sicurezza salva tutto il gestionale: commesse, clienti, pagamenti e fotografie. Viene fatta da sola una volta al giorno, alla prima apertura del programma, e si conservano le ultime 5 copie.
+          </p>
+          <div class="panel">
+            <p><strong>Ultima copia:</strong> <span id="backup-ultimo">—</span></p>
+            <p><strong>Cartella delle copie:</strong> <span id="backup-cartella">—</span></p>
+            <div class="azioni-stampa">
+              <button type="button" id="btn-backup-ora" class="primary">Fai una copia adesso</button>
+              <button type="button" id="btn-backup-apri-cartella">Apri la cartella delle copie</button>
+            </div>
+            <p class="hint">Le copie stanno sullo stesso computer del gestionale: se il computer si rompe o viene rubato, si perdono anche loro. Una volta a settimana copia la cartella più recente su una chiavetta USB o su un disco esterno.</p>
+          </div>
         </div>
 
         <div class="tab-pane" id="tab-impostazioni-calendario">
@@ -421,7 +496,7 @@
       <div class="field">
         <label for="anteprima-artigiani-data-rientro">Data di rientro</label>
         <input type="date" id="anteprima-artigiani-data-rientro" />
-        <p class="hint">Proposta la data di oggi: modificala se il rientro è avvenuto prima.</p>
+        <p class="hint">Proposta la data di oggi: modificala se il rientro è avvenuto prima. L'articolo torna tra quelli "Da lavorare".</p>
       </div>
       <div id="anteprima-artigiani-foto"></div>
       <div class="modal-actions">
@@ -451,7 +526,11 @@
       <div class="field checkbox-field" id="carico-applica-tutti-contenitore" hidden>
         <label><input type="checkbox" id="carico-applica-tutti" /> Applica a tutti gli articoli di questa commessa (si potrà correggere dopo sulle eccezioni)</label>
       </div>
-      <p class="subtitle-inline">Articoli previsti per giorno (passa il mouse su una colonna per i dettagli):</p>
+      <div id="carico-suggerimento" class="carico-suggerimento" hidden>
+        <span id="carico-suggerimento-testo"></span>
+        <button type="button" id="btn-usa-suggerimento-carico" class="primary" hidden>Usa questa data</button>
+      </div>
+      <p class="subtitle-inline">Articoli previsti per giorno (passa il mouse su una colonna per i dettagli, clicca per scegliere la data):</p>
       <div id="carico-grafico" class="grafico-carico"></div>
       <div class="panel">
         <table>
@@ -784,6 +863,16 @@
       <div class="field">
         <label for="cliente-anagrafica-email">Email</label>
         <input type="text" id="cliente-anagrafica-email" />
+      </div>
+      <div class="field">
+        <label for="cliente-anagrafica-privacy">Privacy: consenso a ricevere comunicazioni promozionali</label>
+        <select id="cliente-anagrafica-privacy">
+          <option value="NON_REGISTRATA">Non ancora chiesto / nessuna risposta</option>
+          <option value="ACCONSENTE">Acconsente</option>
+          <option value="NON_ACCONSENTE">Non acconsente</option>
+        </select>
+        <p class="hint">Invia l'informativa con WhatsApp e, quando il cliente risponde, segna qui la sua risposta. Conserva la chat come prova della risposta.</p>
+        <button type="button" id="btn-privacy-whatsapp" class="new-customer-toggle">Prepara su WhatsApp il messaggio con l'informativa</button>
       </div>
 
       <div class="modal-actions">

@@ -452,7 +452,8 @@ CREATE TABLE legacy_maps (
     UNIQUE (source_table, source_key, destination_table)
 ) STRICT;
 
--- Totali calcolati: non vengono duplicati nelle tabelle operative.
+-- Totali calcolati: non vengono duplicati nelle tabelle operative. Le lavorazioni di un articolo
+-- annullato non contano (né nel totale da pagare né tra i prezzi ancora da definire).
 CREATE VIEW v_order_financials AS
 SELECT
     o.order_id,
@@ -478,7 +479,7 @@ SELECT
          AND iw.price_status = 'DA_DEFINIRE'
         THEN 1 ELSE 0 END) AS undefined_price_count
 FROM orders o
-LEFT JOIN items i ON i.order_id = o.order_id
+LEFT JOIN items i ON i.order_id = o.order_id AND i.workflow_status <> 'ANNULLATO'
 LEFT JOIN item_works iw ON iw.item_id = i.item_id
 GROUP BY o.order_id;
 
@@ -609,6 +610,7 @@ BEGIN SELECT RAISE(ABORT, 'La cronologia non può essere eliminata'); END;
 INSERT INTO schema_migrations(version, name) VALUES (1, 'schema_solo_lab_iniziale');
 INSERT INTO schema_migrations(version, name) VALUES (2, 'tempo_lavorazioni_e_capacita_giornaliera');
 INSERT INTO schema_migrations(version, name) VALUES (3, 'giorni_sollecito_artigiani');
+INSERT INTO schema_migrations(version, name) VALUES (4, 'totali_senza_articoli_annullati');
 
 COMMIT;
 
